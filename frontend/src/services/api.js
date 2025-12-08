@@ -1,11 +1,16 @@
-import axios from 'axios';
+import axios from 'axios'
 
+// API base URL - uses environment variable or falls back to window origin
+const API_BASE_URL = import.meta.env.VITE_API_URL || window.location.origin
+
+// Create axios instance with base configuration
 const api = axios.create({
-    baseURL: '/api/v1',
+    baseURL: API_BASE_URL + '/api',
     headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
     },
-});
+    timeout: 300000 // 5 minutes for long-running operations
+})
 
 export const uploadBasic = async (file, onProgress) => {
     const formData = new FormData();

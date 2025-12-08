@@ -28,7 +28,12 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "http://localhost:3000",
+        "https://*.up.railway.app",  # Railway deployments
+        "https://*.vercel.app",  # Vercel deployments
+        "https://*.onrender.com"  # Render deployments
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
