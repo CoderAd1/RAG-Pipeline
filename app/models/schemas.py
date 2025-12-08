@@ -52,6 +52,7 @@ class VisualReference(BaseModel):
     page_number: int
     description: str
     file_path: Optional[str] = None
+    image_url: Optional[str] = None
     table_markdown: Optional[str] = None
     relevance_score: float
 
@@ -81,12 +82,15 @@ class DocumentInfo(BaseModel):
     ingestion_type: Literal["basic", "advanced"]
     chunks_count: Optional[int] = None
     visual_elements_count: Optional[int] = None
+    tables_extracted: Optional[int] = None
+    images_extracted: Optional[int] = None
 
 
 class DocumentListResponse(BaseModel):
-    """List of documents."""
+    """List of documents with insights."""
     documents: List[DocumentInfo]
     total: int
+    insights: Optional[dict] = None
 
 
 # ============= Chunk Schemas =============

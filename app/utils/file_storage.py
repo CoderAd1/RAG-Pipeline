@@ -114,6 +114,41 @@ class FileStorage:
             logger.error(f"Failed to upload table to Supabase Storage: {e}")
             raise
     
+    def save_pdf(
+        self,
+        document_id: str,
+        filename: str,
+        pdf_data: bytes
+    ) -> str:
+        """
+        Save PDF file to Supabase Storage.
+        
+        Args:
+            document_id: Document ID
+            filename: Original filename
+            pdf_data: PDF binary data
+            
+        Returns:
+            Storage path
+        """
+        try:
+            # Create path in storage
+            file_path = f"{document_id}/pdf/{filename}"
+            
+            # Upload to Supabase Storage
+            self.supabase.storage.from_(self.bucket_name).upload(
+                path=file_path,
+                file=pdf_data,
+                file_options={"content-type": "application/pdf"}
+            )
+            
+            logger.info(f"Uploaded PDF to Supabase Storage: {file_path}")
+            return file_path
+            
+        except Exception as e:
+            logger.error(f"Failed to upload PDF to Supabase Storage: {e}")
+            raise
+    
     def get_public_url(self, file_path: str) -> str:
         """
         Get public URL for a file in Supabase Storage.
@@ -130,6 +165,34 @@ class FileStorage:
         except Exception as e:
             logger.error(f"Failed to get public URL: {e}")
             return file_path
+    
+    def get_signed_url(self, file_path: str, expires_in: int = 3600) -> str:
+        """
+        Get signed URL for a file in Supabase Storage (for private buckets).
+        
+        Args:
+            file_path: Path in storage bucket
+            expires_in: URL expiration time in seconds (default 1 hour)
+            
+        Returns:
+            Signed URL
+        """
+        try:
+            response = self.supabase.storage.from_(self.bucket_name).create_signed_url(
+                file_path, 
+                expires_in
+            )
+            if response and 'signedURL' in response:
+                return response['signedURL']
+            elif response and 'signedUrl' in response:
+                return response['signedUrl']
+            else:
+                logger.error(f"Unexpected response format: {response}")
+                return file_path
+        except Exception as e:
+            logger.error(f"Failed to get signed URL: {e}")
+            # Fallback to public URL
+            return self.get_public_url(file_path)
     
     def download_file(self, file_path: str) -> bytes:
         """

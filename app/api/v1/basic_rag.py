@@ -12,7 +12,9 @@ from app.models.schemas import (
     UploadResponse,
     QueryRequest,
     QueryResponse,
-    SourceReference
+    SourceReference,
+    DocumentInfo,
+    DocumentListResponse
 )
 from app.core.database import get_supabase
 from app.api.dependencies import (
@@ -27,6 +29,7 @@ from app.services.embeddings.embedding_service import EmbeddingService
 from app.services.llm.llm_service import LLMService
 from app.services.vector_store.qdrant_basic import QdrantBasicService
 from app.services.pdf.basic_processor import BasicPDFProcessor
+from app.utils.file_storage import storage
 
 router = APIRouter(prefix="/basic", tags=["Basic RAG"])
 
@@ -76,6 +79,19 @@ async def upload_pdf(
             result = supabase.table("documents").insert(doc_data).execute()
             document_id = result.data[0]["id"]
             logger.info(f"Created document record: {document_id}")
+            
+            # Store PDF in Supabase Storage
+            logger.info("Storing PDF in Supabase Storage...")
+            pdf_storage_path = storage.save_pdf(
+                document_id=document_id,
+                filename=sanitized_filename,
+                pdf_data=content
+            )
+            
+            # Update document with file path
+            supabase.table("documents").update({
+                "file_path": pdf_storage_path
+            }).eq("id", document_id).execute()
             
             # Create chunks
             logger.info("Creating chunks...")
@@ -276,4 +292,109 @@ async def query_basic(
     
     except Exception as e:
         logger.error(f"Query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/documents", response_model=DocumentListResponse)
+async def list_basic_documents(
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    List all documents in the basic collection with statistics.
+    
+    Returns document metadata and collection-level insights.
+    """
+    try:
+        logger.info("Fetching basic collection documents")
+        
+        # Get all basic documents
+        docs_result = supabase.table("documents").select(
+            "id, filename, created_at, total_pages, processing_status, ingestion_type"
+        ).eq("ingestion_type", "basic").order("created_at", desc=True).execute()
+        
+        documents = []
+        total_chunks = 0
+        total_pages = 0
+        
+        for doc in docs_result.data:
+            # Get chunk count for this document
+            chunks_result = supabase.table("chunks").select(
+                "id", count="exact"
+            ).eq("document_id", doc["id"]).eq("ingestion_type", "basic").execute()
+            
+            chunk_count = chunks_result.count or 0
+            total_chunks += chunk_count
+            total_pages += doc["total_pages"]
+            
+            documents.append(DocumentInfo(
+                id=doc["id"],
+                filename=doc["filename"],
+                upload_date=doc["created_at"],
+                total_pages=doc["total_pages"],
+                processing_status=doc["processing_status"],
+                ingestion_type=doc["ingestion_type"],
+                chunks_count=chunk_count
+            ))
+        
+        # Calculate insights
+        insights = {
+            "total_documents": len(documents),
+            "total_pages": total_pages,
+            "total_chunks": total_chunks,
+            "avg_chunks_per_doc": round(total_chunks / len(documents), 1) if documents else 0
+        }
+        
+        logger.success(f"Retrieved {len(documents)} basic documents")
+        
+        return DocumentListResponse(
+            documents=documents,
+            total=len(documents),
+            insights=insights
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/pdf")
+async def get_document_pdf(
+    document_id: str,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Get PDF URL for a basic document.
+    
+    Returns the public URL to view/download the PDF.
+    """
+    try:
+        logger.info(f"Fetching PDF for document: {document_id}")
+        
+        # Get document record
+        doc_result = supabase.table("documents").select(
+            "id, filename, file_path, ingestion_type"
+        ).eq("id", document_id).eq("ingestion_type", "basic").execute()
+        
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        document = doc_result.data[0]
+        file_path = document.get("file_path")
+        
+        if not file_path:
+            raise HTTPException(status_code=404, detail="PDF file not found for this document")
+        
+        # Get signed URL from storage (valid for 1 hour)
+        pdf_url = storage.get_signed_url(file_path, expires_in=3600)
+        
+        return {
+            "document_id": document_id,
+            "filename": document["filename"],
+            "pdf_url": pdf_url,
+            "file_path": file_path
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get PDF URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))

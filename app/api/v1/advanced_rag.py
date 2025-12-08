@@ -14,7 +14,9 @@ from app.models.schemas import (
     QueryRequest,
     AdvancedQueryResponse,
     SourceReference,
-    VisualReference
+    VisualReference,
+    DocumentInfo,
+    DocumentListResponse
 )
 from app.core.database import get_supabase
 from app.api.dependencies import (
@@ -33,6 +35,7 @@ from app.services.vector_store.qdrant_advanced import QdrantAdvancedService
 from app.services.pdf.advanced_processor import AdvancedPDFProcessor
 from app.services.visual.table_processor import TableProcessor
 from app.services.visual.image_processor import ImageProcessor
+from app.utils.file_storage import storage
 
 router = APIRouter(prefix="/advanced", tags=["Advanced RAG"])
 
@@ -85,6 +88,19 @@ async def upload_pdf_advanced(
             result = supabase.table("documents").insert(doc_data).execute()
             document_id = result.data[0]["id"]
             logger.info(f"Created document record: {document_id}")
+            
+            # Store PDF in Supabase Storage
+            logger.info("Storing PDF in Supabase Storage...")
+            pdf_storage_path = storage.save_pdf(
+                document_id=document_id,
+                filename=sanitized_filename,
+                pdf_data=content
+            )
+            
+            # Update document with file path
+            supabase.table("documents").update({
+                "file_path": pdf_storage_path
+            }).eq("id", document_id).execute()
             
             # Process visual elements
             visual_elements_data = []
@@ -430,13 +446,30 @@ async def query_advanced(
         visual_refs = []
         for result in visual_results:
             ve_detail = visual_details.get(result["element_id"], {})
+            
+            # Generate signed URL for image/table/figure visualization
+            image_url = None
+            file_path = ve_detail.get("file_path")
+            if file_path:
+                # For images, figures, charts - use the file_path directly if it's an image file
+                if result["element_type"] in ["image", "figure", "chart"]:
+                    image_url = storage.get_signed_url(file_path, expires_in=3600)
+                # For tables, check metadata for image_path first, then file_path
+                elif result["element_type"] == "table":
+                    metadata = ve_detail.get("metadata", {})
+                    if metadata.get("image_path"):
+                        image_url = storage.get_signed_url(metadata["image_path"], expires_in=3600)
+                    elif file_path.endswith(('.png', '.jpg', '.jpeg')):
+                        image_url = storage.get_signed_url(file_path, expires_in=3600)
+            
             visual_refs.append(VisualReference(
                 element_id=result["element_id"],
                 element_type=result["element_type"],
                 document_id=result["document_id"],
                 page_number=result["page"],
                 description=result["text_annotation"],
-                file_path=ve_detail.get("file_path"),
+                file_path=file_path,
+                image_url=image_url,
                 table_markdown=ve_detail.get("table_markdown"),
                 relevance_score=result["score"]
             ))
@@ -467,4 +500,246 @@ async def query_advanced(
     
     except Exception as e:
         logger.error(f"Advanced query failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/documents", response_model=DocumentListResponse)
+async def list_advanced_documents(
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    List all documents in the advanced collection with multimodal statistics.
+    
+    Returns document metadata and collection-level insights including visual elements.
+    """
+    try:
+        logger.info("Fetching advanced collection documents")
+        
+        # Get all advanced documents
+        docs_result = supabase.table("documents").select(
+            "id, filename, created_at, total_pages, processing_status, ingestion_type"
+        ).eq("ingestion_type", "advanced").order("created_at", desc=True).execute()
+        
+        documents = []
+        total_chunks = 0
+        total_pages = 0
+        total_tables = 0
+        total_images = 0
+        total_visual_elements = 0
+        
+        for doc in docs_result.data:
+            # Get chunk count for this document
+            chunks_result = supabase.table("chunks").select(
+                "id", count="exact"
+            ).eq("document_id", doc["id"]).eq("ingestion_type", "advanced").execute()
+            
+            # Get visual elements count by type
+            visual_result = supabase.table("visual_elements").select(
+                "element_type"
+            ).eq("document_id", doc["id"]).execute()
+            
+            chunk_count = chunks_result.count or 0
+            tables_count = sum(1 for ve in visual_result.data if ve["element_type"] == "table")
+            images_count = len(visual_result.data) - tables_count
+            visual_count = len(visual_result.data)
+            
+            total_chunks += chunk_count
+            total_pages += doc["total_pages"]
+            total_tables += tables_count
+            total_images += images_count
+            total_visual_elements += visual_count
+            
+            documents.append(DocumentInfo(
+                id=doc["id"],
+                filename=doc["filename"],
+                upload_date=doc["created_at"],
+                total_pages=doc["total_pages"],
+                processing_status=doc["processing_status"],
+                ingestion_type=doc["ingestion_type"],
+                chunks_count=chunk_count,
+                visual_elements_count=visual_count,
+                tables_extracted=tables_count,
+                images_extracted=images_count
+            ))
+        
+        # Calculate insights
+        insights = {
+            "total_documents": len(documents),
+            "total_pages": total_pages,
+            "total_chunks": total_chunks,
+            "total_visual_elements": total_visual_elements,
+            "total_tables": total_tables,
+            "total_images": total_images,
+            "avg_visual_per_doc": round(total_visual_elements / len(documents), 1) if documents else 0
+        }
+        
+        logger.success(f"Retrieved {len(documents)} advanced documents")
+        
+        return DocumentListResponse(
+            documents=documents,
+            total=len(documents),
+            insights=insights
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to list advanced documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/pdf")
+async def get_document_pdf(
+    document_id: str,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Get PDF URL for an advanced document.
+    
+    Returns the public URL to view/download the PDF.
+    """
+    try:
+        logger.info(f"Fetching PDF for advanced document: {document_id}")
+        
+        # Get document record
+        doc_result = supabase.table("documents").select(
+            "id, filename, file_path, ingestion_type"
+        ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
+        
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        document = doc_result.data[0]
+        file_path = document.get("file_path")
+        
+        if not file_path:
+            raise HTTPException(status_code=404, detail="PDF file not found for this document")
+        
+        # Get signed URL from storage (valid for 1 hour)
+        pdf_url = storage.get_signed_url(file_path, expires_in=3600)
+        
+        return {
+            "document_id": document_id,
+            "filename": document["filename"],
+            "pdf_url": pdf_url,
+            "file_path": file_path
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get PDF URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/images")
+async def get_document_images(
+    document_id: str,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Get all image elements for an advanced document.
+    
+    Returns list of images with URLs and descriptions.
+    """
+    try:
+        logger.info(f"Fetching images for document: {document_id}")
+        
+        # Get document to verify it exists
+        doc_result = supabase.table("documents").select(
+            "id, filename, ingestion_type"
+        ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
+        
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Get all visual elements (images only, not tables)
+        visual_result = supabase.table("visual_elements").select(
+            "id, element_type, page_number, file_path, text_annotation, metadata"
+        ).eq("document_id", document_id).in_("element_type", ["image", "figure", "chart"]).execute()
+        
+        images = []
+        for ve in visual_result.data:
+            image_url = None
+            if ve.get("file_path"):
+                # Use signed URL for images (valid for 1 hour)
+                image_url = storage.get_signed_url(ve["file_path"], expires_in=3600)
+            
+            images.append({
+                "id": ve["id"],
+                "element_type": ve["element_type"],
+                "page_number": ve["page_number"],
+                "image_url": image_url,
+                "description": ve.get("text_annotation", "No description available"),
+                "metadata": ve.get("metadata", {})
+            })
+        
+        return {
+            "document_id": document_id,
+            "filename": doc_result.data[0]["filename"],
+            "total_images": len(images),
+            "images": images
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get images: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}/tables")
+async def get_document_tables(
+    document_id: str,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Get all table elements for an advanced document.
+    
+    Returns list of tables with data and descriptions.
+    """
+    try:
+        logger.info(f"Fetching tables for document: {document_id}")
+        
+        # Get document to verify it exists
+        doc_result = supabase.table("documents").select(
+            "id, filename, ingestion_type"
+        ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
+        
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Get all visual elements (tables only)
+        visual_result = supabase.table("visual_elements").select(
+            "id, element_type, page_number, file_path, text_annotation, metadata"
+        ).eq("document_id", document_id).eq("element_type", "table").execute()
+        
+        tables = []
+        for ve in visual_result.data:
+            # Check if there's an image_path in metadata for table visualization
+            table_image_url = None
+            metadata = ve.get("metadata", {})
+            
+            # Try to get image path from metadata or use file_path if it's an image
+            if metadata.get("image_path"):
+                table_image_url = storage.get_signed_url(metadata["image_path"], expires_in=3600)
+            elif ve.get("file_path") and ve["file_path"].endswith(('.png', '.jpg', '.jpeg')):
+                table_image_url = storage.get_signed_url(ve["file_path"], expires_in=3600)
+            
+            tables.append({
+                "id": ve["id"],
+                "page_number": ve["page_number"],
+                "description": ve.get("text_annotation", "No description available"),
+                "image_url": table_image_url,
+                "metadata": metadata
+            })
+        
+        return {
+            "document_id": document_id,
+            "filename": doc_result.data[0]["filename"],
+            "total_tables": len(tables),
+            "tables": tables
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get tables: {e}")
         raise HTTPException(status_code=500, detail=str(e))
