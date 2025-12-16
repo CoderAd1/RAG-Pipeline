@@ -56,8 +56,9 @@ class LLMService:
         # Build context
         context = self._build_context(context_chunks, visual_elements)
         
-        # Create prompt
-        prompt = self._create_prompt(question, context)
+        # Create prompt (use multimodal prompt if visual elements are present)
+        has_visual_elements = visual_elements is not None and len(visual_elements) > 0
+        prompt = self._create_prompt(question, context, has_visual_elements=has_visual_elements)
         
         # Generate answer using Groq
         try:
@@ -134,64 +135,64 @@ class LLMService:
         
         return "\n\n".join(context_parts)
     
-    def _create_prompt(self, question: str, context: str) -> str:
+    def _create_prompt(self, question: str, context: str, has_visual_elements: bool = False) -> str:
         """Create enhanced prompt for answer generation with multimodal awareness."""
-        prompt = f"""Document Context (including tables, images, charts, and figures):
+        
+        # For multimodal queries (Advanced RAG), use a prompt that emphasizes grounding
+        if has_visual_elements:
+            prompt = f"""Document Context (including tables, images, charts, and figures):
+{context}
+
+Question: {question}
+
+ANSWER INSTRUCTIONS FOR MULTIMODAL CONTENT:
+
+**CRITICAL: GROUND YOUR ANSWER IN THE PROVIDED CONTEXT**
+- ONLY use information from the [Source N] entries above
+- If quoting tables/figures, cite the exact source: [Source N]
+- Answer in 2-4 sentences, being specific about what the sources show
+
+1. TABLE/FIGURE PRIORITY:
+   - When sources contain tables or visual descriptions, extract data directly
+   - Quote exact values, percentages, or findings from the sources
+   - If a table shows the answer, state: "According to [Source N], ..."
+
+2. DO NOT MAKE UP INFORMATION:
+   - If the answer is not in the context, say "The provided context does not contain this information"
+   - Do not use general knowledge for specific facts
+
+3. CITATION FORMAT:
+   - Always cite: [Source N] where information came from
+   - Be specific about whether it's from text, table, or figure
+
+Answer based ONLY on the provided sources:"""
+        else:
+            # For text-only queries (Basic RAG), use concise prompt
+            prompt = f"""Document Context:
 {context}
 
 Question: {question}
 
 ANSWER INSTRUCTIONS:
 
-1. VISUAL ELEMENT DETECTION:
-   - Look for [Source N] entries that mention "table", "chart", "graph", "figure", "image"
-   - These represent visual elements from the document
+**CRITICAL: BE CONCISE AND DIRECT**
+- Answer in 1-3 sentences maximum
+- Give the specific answer first, then brief supporting context if needed
+- Do NOT repeat the question or use preambles like "Based on the context..."
+- Do NOT say "I couldn't find" - just answer with what you know
 
-2. VISUAL CONTENT INTEGRATION:
-   - When answering, reference visual elements by their descriptions
-   - Explain what charts/graphs show and how they relate to the question
-   - If a table is referenced, extract specific data points mentioned
-   - Describe trends, patterns, or insights shown in visual elements
+1. CITATION REQUIREMENTS:
+   - Cite sources briefly: [Source N]
 
-3. TABLE DATA EXTRACTION (CRITICAL):
-   - TABLES ARE IN MARKDOWN FORMAT (with | symbols):
-     | Header1    | Header2   | Header3  |
-     |------------|-----------|----------|
-     | Row1Value1 | Row1Value2| Row1Value3|
-
-   - HOW TO EXTRACT: Find correct ROW by first column, then COLUMN by headers
-   - Extract EXACT values from row × column intersections
-   - Match names case-insensitively, handle variations
-
-4. CHART/GRAPH ANALYSIS:
-   - Describe what the visualization shows
-   - Explain trends, comparisons, relationships depicted
-   - Connect visual insights to text content
-
-5. CITATION REQUIREMENTS:
-   - Cite ALL sources: [Source N, Page X]
-   - Specify if information comes from text, table, or visual element
-   - Example: "The bar chart on page 5 shows..." or "According to the table on page 3..."
-
-6. ANSWER STRUCTURE FOR VISUAL QUERIES:
-   - If question asks "show me" or "what does X look like":
-     → Describe the relevant visual element in detail
-     → Explain what it shows and key insights
-   - If question is about data/trends:
-     → Reference both tabular data and visual representations
-     → Explain how visuals illustrate the data
-
-7. ACCURACY FIRST:
-   - Extract EXACT values from tables/visuals
+2. ACCURACY FIRST:
+   - Extract EXACT values from the context
    - Don't approximate unless explicitly stated
-   - If visual shows a clear trend/pattern, describe it accurately
 
-8. HANDLING INCOMPLETE CONTEXT:
+3. HANDLING INCOMPLETE CONTEXT:
    - If the context doesn't fully answer the question, use your general knowledge
-   - Clearly distinguish between context-based and knowledge-based information
-   - Provide comprehensive answers by intelligently combining both sources
+   - Provide direct answers, not explanations of what you couldn't find
 
-Answer comprehensively using the context AND your knowledge as needed:"""
+Answer CONCISELY and DIRECTLY:"""
 
         return prompt
     

@@ -31,7 +31,7 @@ class EvaluationConfig:
     """Configuration for evaluation run."""
     test_dataset_path: str = "evaluation/datasets/test_queries.json"
     output_dir: str = "evaluation/results"
-    top_k: int = 5
+    top_k: int = 10
     limit: Optional[int] = None  # Limit number of questions (for testing)
     methods: List[str] = None  # Which methods to evaluate
     
