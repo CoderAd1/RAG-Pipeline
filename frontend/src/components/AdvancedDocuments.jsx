@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdvancedDocuments, getDocumentPdf, getDocumentImages, getDocumentTables } from '../services/api'
+import { getAdvancedDocuments, getDocumentPdf, getDocumentImages, getDocumentTables, deleteDocument } from '../services/api'
 import CombinedDocumentViewer from './CombinedDocumentViewer'
 
 function AdvancedDocuments() {
@@ -60,6 +60,34 @@ function AdvancedDocuments() {
         setPdfUrl(null)
         setImages([])
         setTables([])
+    }
+
+    const handleDeleteDocument = async (e, doc) => {
+        // Stop event propagation to prevent opening the document viewer
+        e.stopPropagation()
+
+        // Confirm deletion
+        const confirmDelete = window.confirm(
+            `Are you sure you want to delete "${doc.filename}"?\n\nThis will permanently remove:\n- The document and all its data\n- All text chunks and embeddings\n- All visual elements (${doc.visual_elements_count} items)\n- All vectors from the database\n- All stored files\n\nThis action cannot be undone.`
+        )
+
+        if (!confirmDelete) {
+            return
+        }
+
+        try {
+            // Call delete API
+            await deleteDocument(doc.id, 'advanced')
+
+            // Refresh the documents list
+            await fetchDocuments()
+
+            // Show success message
+            alert(`Document "${doc.filename}" deleted successfully`)
+        } catch (err) {
+            console.error('Failed to delete document:', err)
+            alert(`Failed to delete document: ${err.message || 'Unknown error'}`)
+        }
     }
 
     const formatDate = (dateString) => {
@@ -155,8 +183,17 @@ function AdvancedDocuments() {
                             key={doc.id}
                             className="document-card document-card-advanced"
                             onClick={() => handleDocumentClick(doc)}
-                            style={{ cursor: 'pointer' }}
+                            style={{ cursor: 'pointer', position: 'relative' }}
                         >
+                            <button
+                                className="delete-button"
+                                onClick={(e) => handleDeleteDocument(e, doc)}
+                                title="Delete document"
+                                aria-label="Delete document"
+                            >
+                                ✕
+                            </button>
+
                             <div className="document-header">
                                 <div className="document-icon">PDF</div>
                                 <div className="document-title">

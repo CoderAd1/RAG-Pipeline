@@ -363,38 +363,127 @@ async def get_document_pdf(
 ):
     """
     Get PDF URL for a basic document.
-    
+
     Returns the public URL to view/download the PDF.
     """
     try:
         logger.info(f"Fetching PDF for document: {document_id}")
-        
+
         # Get document record
         doc_result = supabase.table("documents").select(
             "id, filename, file_path, ingestion_type"
         ).eq("id", document_id).eq("ingestion_type", "basic").execute()
-        
+
         if not doc_result.data:
             raise HTTPException(status_code=404, detail="Document not found")
-        
+
         document = doc_result.data[0]
         file_path = document.get("file_path")
-        
+
         if not file_path:
             raise HTTPException(status_code=404, detail="PDF file not found for this document")
-        
+
         # Get signed URL from storage (valid for 1 hour)
         pdf_url = storage.get_signed_url(file_path, expires_in=3600)
-        
+
         return {
             "document_id": document_id,
             "filename": document["filename"],
             "pdf_url": pdf_url,
             "file_path": file_path
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get PDF URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/documents/{document_id}")
+async def delete_basic_document(
+    document_id: str,
+    supabase: Client = Depends(get_supabase),
+    qdrant_service: QdrantBasicService = Depends(get_qdrant_basic)
+):
+    """
+    Delete a document and all associated data from basic RAG system.
+
+    Removes:
+    - Document record from database
+    - All chunks and embeddings
+    - All vectors from Qdrant
+    - All files from Supabase Storage
+    """
+    try:
+        logger.info(f"Deleting basic document: {document_id}")
+
+        # Verify document exists and is basic type
+        doc_result = supabase.table("documents").select(
+            "id, filename, ingestion_type"
+        ).eq("id", document_id).eq("ingestion_type", "basic").execute()
+
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        document = doc_result.data[0]
+        filename = document["filename"]
+
+        # 1. Delete vectors from Qdrant
+        logger.info(f"Deleting vectors from Qdrant for document {document_id}")
+        try:
+            qdrant_service.delete_by_document(document_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete from Qdrant (may not exist): {e}")
+
+        # 2. Delete files from Supabase Storage
+        logger.info(f"Deleting files from storage for document {document_id}")
+        try:
+            storage.delete_document_files(document_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete storage files (may not exist): {e}")
+
+        # 3. Delete embeddings (will cascade delete based on foreign keys)
+        logger.info(f"Deleting embeddings for document {document_id}")
+        try:
+            # Get chunk IDs first
+            chunks_result = supabase.table("chunks").select("id").eq(
+                "document_id", document_id
+            ).eq("ingestion_type", "basic").execute()
+
+            chunk_ids = [c["id"] for c in chunks_result.data]
+
+            if chunk_ids:
+                # Delete embeddings
+                supabase.table("embeddings").delete().in_("chunk_id", chunk_ids).execute()
+        except Exception as e:
+            logger.warning(f"Failed to delete embeddings: {e}")
+
+        # 4. Delete chunks
+        logger.info(f"Deleting chunks for document {document_id}")
+        try:
+            supabase.table("chunks").delete().eq("document_id", document_id).eq(
+                "ingestion_type", "basic"
+            ).execute()
+        except Exception as e:
+            logger.warning(f"Failed to delete chunks: {e}")
+
+        # 5. Delete document record
+        logger.info(f"Deleting document record {document_id}")
+        supabase.table("documents").delete().eq("id", document_id).eq(
+            "ingestion_type", "basic"
+        ).execute()
+
+        logger.success(f"Successfully deleted document {document_id} ({filename})")
+
+        return {
+            "success": True,
+            "message": f"Document '{filename}' deleted successfully",
+            "document_id": document_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete document: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")

@@ -124,4 +124,16 @@ export const getDocumentTables = async (documentId) => {
     }
 }
 
+// Delete a document (basic or advanced)
+export const deleteDocument = async (documentId, ingestionType = 'basic') => {
+    try {
+        const endpoint = ingestionType === 'basic' ? '/api/v1/basic' : '/api/v1/advanced'
+        const response = await axios.delete(`${endpoint}/documents/${documentId}`)
+        return response.data
+    } catch (error) {
+        console.error('Delete document error:', error)
+        throw error
+    }
+}
+
 export default api;

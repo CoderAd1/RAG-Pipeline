@@ -1584,3 +1584,42 @@ h3 {
     padding: 1rem;
   }
 }
+
+/* Delete Button for Documents */
+.delete-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 107, 107, 0.15);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 50%;
+  color: #ff6b6b;
+  font-size: 1.25rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  z-index: 10;
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.document-card:hover .delete-button {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.delete-button:hover {
+  background: rgba(255, 107, 107, 0.3);
+  border-color: rgba(255, 107, 107, 0.5);
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+}
+
+.delete-button:active {
+  transform: scale(0.95) rotate(90deg);
+}
