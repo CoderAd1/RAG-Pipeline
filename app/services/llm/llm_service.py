@@ -11,21 +11,14 @@ except ImportError:
     GROQ_AVAILABLE = False
     logger.warning("Groq not available")
 
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    logger.warning("Google Generative AI not available")
-
 
 class LLMService:
-    """Service for LLM-based answer generation using Groq (text) and Gemini (vision)."""
-    
+    """Service for LLM-based answer generation using Groq."""
+
     def __init__(self, model: Optional[str] = None):
         """
-        Initialize LLM service with Groq for text and Gemini for vision.
-        
+        Initialize LLM service with Groq.
+
         Args:
             model: Model name (defaults to settings.default_llm_model)
         """
@@ -34,19 +27,13 @@ class LLMService:
             raise RuntimeError(
                 "Groq not installed. Install with: pip install groq"
             )
-        
+
         if not settings.groq_api_key:
             raise ValueError("GROQ_API_KEY not set in environment")
-        
+
         self.groq_client = Groq(api_key=settings.groq_api_key)
         self.model_name = model or settings.default_llm_model
-        
-        # Initialize Gemini for vision tasks
-        self.gemini_available = GEMINI_AVAILABLE
-        if GEMINI_AVAILABLE and settings.google_api_key:
-            genai.configure(api_key=settings.google_api_key)
-            logger.info("Gemini configured for vision tasks")
-        
+
         logger.info(f"LLM service initialized: Groq - {self.model_name}")
     
     def generate_answer(
@@ -79,7 +66,13 @@ class LLMService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant answering questions based on provided document context."
+                        "content": (
+                            "You are an expert data analyst and research assistant. "
+                            "Answer questions precisely based on provided document context, including text, tables, and figures. "
+                            "When tables are present, extract specific values accurately. "
+                            "Pay special attention to statistical data, p-values, confidence intervals, and numerical results. "
+                            "Always cite your sources using [Source N] notation."
+                        )
                     },
                     {
                         "role": "user",
@@ -138,21 +131,59 @@ class LLMService:
         return "\n\n".join(context_parts)
     
     def _create_prompt(self, question: str, context: str) -> str:
-        """Create prompt for answer generation."""
-        prompt = f"""Context from documents:
+        """Create enhanced prompt for answer generation with multimodal awareness."""
+        prompt = f"""Context from documents (including tables, images, charts, and figures):
 {context}
 
 Question: {question}
 
-Instructions:
-- Answer the question based ONLY on the provided context
-- If the context doesn't contain enough information, say so
-- Cite sources using [Source N] notation
-- Be concise but comprehensive
-- If tables or visual elements are referenced, incorporate that information
+MULTIMODAL ANSWER INSTRUCTIONS - INTEGRATE VISUAL AND TEXT CONTENT:
 
-Answer:"""
-        
+1. VISUAL ELEMENT DETECTION:
+   - Look for [Source N] entries that mention "table", "chart", "graph", "figure", "image"
+   - These represent visual elements from the document
+
+2. VISUAL CONTENT INTEGRATION:
+   - When answering, reference visual elements by their descriptions
+   - Explain what charts/graphs show and how they relate to the question
+   - If a table is referenced, extract specific data points mentioned
+   - Describe trends, patterns, or insights shown in visual elements
+
+3. TABLE DATA EXTRACTION (CRITICAL):
+   - TABLES ARE IN MARKDOWN FORMAT (with | symbols):
+     | Header1    | Header2   | Header3  |
+     |------------|-----------|----------|
+     | Row1Value1 | Row1Value2| Row1Value3|
+
+   - HOW TO EXTRACT: Find correct ROW by first column, then COLUMN by headers
+   - Extract EXACT values from row × column intersections
+   - Match names case-insensitively, handle variations
+
+4. CHART/GRAPH ANALYSIS:
+   - Describe what the visualization shows
+   - Explain trends, comparisons, relationships depicted
+   - Connect visual insights to text content
+
+5. CITATION REQUIREMENTS:
+   - Cite ALL sources: [Source N, Page X]
+   - Specify if information comes from text, table, or visual element
+   - Example: "The bar chart on page 5 shows..." or "According to the table on page 3..."
+
+6. ANSWER STRUCTURE FOR VISUAL QUERIES:
+   - If question asks "show me" or "what does X look like":
+     → Describe the relevant visual element in detail
+     → Explain what it shows and key insights
+   - If question is about data/trends:
+     → Reference both tabular data and visual representations
+     → Explain how visuals illustrate the data
+
+7. ACCURACY FIRST:
+   - Extract EXACT values from tables/visuals
+   - Don't approximate unless explicitly stated
+   - If visual shows a clear trend/pattern, describe it accurately
+
+Answer comprehensively, integrating both text and visual information:"""
+
         return prompt
     
     def generate(
@@ -187,45 +218,4 @@ Answer:"""
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"Groq generation failed: {e}")
-            raise
-    
-    def generate_with_image(
-        self,
-        prompt: str,
-        image_path: str,
-        max_tokens: Optional[int] = None
-    ) -> str:
-        """
-        Generate text with image input (for vision tasks).
-        
-        Args:
-            prompt: Text prompt
-            image_path: Path to image file
-            max_tokens: Maximum tokens to generate
-            
-        Returns:
-            Generated text
-        """
-        try:
-            from PIL import Image
-            
-            # Load image
-            image = Image.open(image_path)
-            
-            generation_config = genai.GenerationConfig(
-                max_output_tokens=max_tokens or settings.llm_max_tokens,
-            )
-            
-            # Use Gemini 2.0 Flash (supports vision)
-            vision_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            
-            response = vision_model.generate_content(
-                [prompt, image],
-                generation_config=generation_config
-            )
-            
-            return response.text
-            
-        except Exception as e:
-            logger.error(f"Gemini vision generation failed: {e}")
             raise

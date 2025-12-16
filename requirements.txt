@@ -22,7 +22,6 @@ postgrest==0.13.2
 
 # LLM Integration
 groq>=0.37.0
-google-generativeai==0.3.2
 
 # Utilities
 python-dotenv==1.0.0
