@@ -104,12 +104,12 @@ class QdrantBasicService:
                 ]
             )
         
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.COLLECTION_NAME,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=query_filter
-        )
+        ).points
         
         formatted_results = []
         for result in results:

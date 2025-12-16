@@ -1,7 +1,7 @@
 """Advanced RAG API endpoints."""
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
-from typing import List
+from typing import List, Dict, Any
 import tempfile
 import time
 from pathlib import Path
@@ -38,6 +38,312 @@ from app.services.visual.image_processor import ImageProcessor
 from app.utils.file_storage import storage
 
 router = APIRouter(prefix="/advanced", tags=["Advanced RAG"])
+
+
+def _extract_query_terms(query: str) -> list:
+    """
+    UNIVERSAL query term extraction - works for ANY query type, not just statistical.
+
+    Extracts ALL meaningful terms from the query including:
+    - Function calls: log(population), sqrt(x), etc.
+    - Multi-word phrases: "market share", "customer satisfaction"
+    - Quoted terms: "exact phrase"
+    - Compound terms with punctuation: p.value, t-test, etc.
+    - Individual significant words
+
+    Returns list of terms to search for in tables.
+    """
+    import re
+
+    terms = []
+    query_lower = query.lower()
+
+    # 1. Extract quoted phrases (highest priority - user wants exact match)
+    quoted = re.findall(r'["\']([^"\']+)["\']', query)
+    terms.extend(quoted)
+
+    # 2. Extract function patterns: log(...), ln(...), sqrt(...), etc.
+    # Matches ANY function name, not just predefined ones
+    function_patterns = re.findall(r'\b([a-z_]+)\s*\(\s*([^)]+)\s*\)', query_lower)
+    for func, arg in function_patterns:
+        terms.append(f"{func}({arg.strip()})")
+        terms.append(f"{func} ({arg.strip()})")  # With space
+        terms.append(arg.strip())  # Also add the argument alone
+
+    # 3. Extract compound terms with special characters (dots, hyphens, underscores)
+    # Examples: p.value, t-test, customer_id, GDP-2023
+    compound_terms = re.findall(r'\b[a-z0-9]+[._-][a-z0-9._-]+\b', query_lower)
+    for term in compound_terms:
+        terms.append(term)
+        # Add variations
+        terms.append(term.replace('.', ' '))
+        terms.append(term.replace('-', ' '))
+        terms.append(term.replace('_', ' '))
+        terms.append(term.replace('.', '').replace('-', '').replace('_', ''))
+
+    # 4. Extract multi-word phrases (bigrams and trigrams)
+    words = re.findall(r'\b[a-z][a-z0-9_]*\b', query_lower)
+    # Filter out stop words
+    stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at',
+                  'to', 'for', 'of', 'with', 'by', 'from', 'as', 'this', 'that',
+                  'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do',
+                  'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+                  'can', 'show', 'find', 'get', 'give', 'tell', 'me', 'you', 'it'}
+
+    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
+
+    # Add bigrams (2-word phrases)
+    for i in range(len(filtered_words) - 1):
+        bigram = f"{filtered_words[i]} {filtered_words[i+1]}"
+        terms.append(bigram)
+
+    # Add trigrams (3-word phrases)
+    for i in range(len(filtered_words) - 2):
+        trigram = f"{filtered_words[i]} {filtered_words[i+1]} {filtered_words[i+2]}"
+        terms.append(trigram)
+
+    # 5. Add individual significant words
+    terms.extend(filtered_words)
+
+    # 6. Extract numbers and percentages
+    numbers = re.findall(r'\b\d+\.?\d*%?\b', query)
+    terms.extend(numbers)
+
+    # Remove duplicates while preserving order
+    unique_terms = []
+    seen = set()
+    for term in terms:
+        term_clean = term.strip().lower()
+        if term_clean and term_clean not in seen and len(term_clean) > 1:
+            unique_terms.append(term_clean)
+            seen.add(term_clean)
+
+    return unique_terms
+
+
+def _search_tables_by_terms(
+    supabase,
+    document_ids: list,
+    query_terms: list
+) -> list:
+    """
+    UNIVERSAL table search - finds tables containing ANY of the query terms.
+
+    Uses fuzzy matching and intelligent scoring to find relevant tables
+    for ANY query type (not just statistical).
+
+    Args:
+        supabase: Supabase client
+        document_ids: List of document IDs to search within
+        query_terms: List of terms extracted from the query
+
+    Returns:
+        List of matched tables with relevance scores
+    """
+    try:
+        # Fetch ALL tables from the specified documents
+        tables_result = supabase.table("visual_elements").select(
+            "id, element_type, page_number, file_path, text_annotation, table_markdown, metadata, document_id"
+        ).eq("element_type", "table").in_("document_id", document_ids).execute()
+
+        if not tables_result.data:
+            return []
+
+        matched_tables = []
+
+        for table in tables_result.data:
+            table_markdown = table.get("table_markdown", "")
+
+            if not table_markdown:
+                continue
+
+            # Scan the table for ANY query terms (case-insensitive, fuzzy)
+            markdown_lower = table_markdown.lower()
+            text_annotation_lower = table.get("text_annotation", "").lower()
+
+            matches = []
+            match_scores = []
+
+            for term in query_terms:
+                term_clean = term.strip().lower()
+
+                if not term_clean or len(term_clean) < 2:
+                    continue
+
+                # Check for exact match in markdown
+                if term_clean in markdown_lower:
+                    matches.append(term_clean)
+                    # Longer terms get higher scores (more specific)
+                    match_scores.append(len(term_clean))
+                    continue
+
+                # Check for partial match (fuzzy) - useful for variations
+                # Split term into parts and check if all parts exist
+                term_parts = term_clean.split()
+                if len(term_parts) > 1:
+                    # Multi-word term - check if all words appear
+                    if all(part in markdown_lower or part in text_annotation_lower for part in term_parts):
+                        matches.append(term_clean)
+                        match_scores.append(len(term_clean) * 0.8)  # Slightly lower score for fuzzy
+
+            # If we found matches, this table is relevant
+            if matches:
+                # Calculate intelligent relevance score
+                # - More matches = higher score
+                # - Longer matched terms = higher score (more specific)
+                # - Base score: 0.9 (high but not higher than perfect vector matches)
+                total_match_score = sum(match_scores)
+                match_count = len(matches)
+
+                # Normalize score: 0.90 to 0.99
+                relevance_score = min(0.90 + (match_count * 0.02) + (total_match_score / 1000), 0.99)
+
+                matched_tables.append({
+                    "vector_id": f"term_match_{table['id']}",
+                    "score": relevance_score,
+                    "element_id": table["id"],
+                    "document_id": table["document_id"],
+                    "element_type": "table",
+                    "text_annotation": table.get("text_annotation", ""),
+                    "page": table.get("page_number", 1),
+                    "file_path": table.get("file_path"),
+                    "metadata": {
+                        **table.get("metadata", {}),
+                        "matched_terms": matches,
+                        "match_count": match_count,
+                        "match_method": "hybrid_term_search"
+                    }
+                })
+
+                logger.info(f"Table on page {table.get('page_number')} matches {match_count} terms: {matches[:5]}")
+
+        # Sort by score (more and better matches = higher score)
+        matched_tables.sort(key=lambda x: x["score"], reverse=True)
+
+        return matched_tables[:8]  # Return top 8 term-matched tables
+
+    except Exception as e:
+        logger.error(f"Universal table search failed: {e}")
+        return []
+
+
+def _is_visual_query(query: str) -> bool:
+    """
+    Enhanced detection of visual queries using comprehensive keyword analysis.
+
+    Detects queries asking for visual elements (graphs, charts, figures, images)
+    with expanded keyword coverage and semantic analysis.
+
+    Args:
+        query: User query string
+
+    Returns:
+        True if query is requesting a visual element
+    """
+    query_lower = query.lower()
+
+    # Comprehensive visual keywords organized by category
+    visual_keywords = [
+        # Direct visual terms
+        'graph', 'chart', 'plot', 'figure', 'diagram', 'image',
+        'visualization', 'visual', 'picture', 'illustration',
+        'graphic', 'infographic', 'schematic',
+
+        # Chart types
+        'bar chart', 'line graph', 'pie chart', 'scatter plot',
+        'histogram', 'heatmap', 'box plot', 'violin plot',
+        'area chart', 'bubble chart', 'radar chart', 'treemap',
+        'sankey diagram', 'network graph', 'flowchart',
+
+        # Visual actions
+        'show me', 'display', 'illustrate', 'visualize',
+        'plot', 'chart', 'graph', 'draw', 'sketch',
+
+        # Visual references
+        'give me the graph', 'give me the chart', 'give me the figure',
+        'show the plot', 'display the chart', 'view the graph',
+
+        # Data visualization
+        'trend', 'pattern', 'distribution', 'correlation',
+        'comparison', 'relationship', 'progression',
+
+        # Visual context
+        'looks like', 'appears as', 'represented by',
+        'depicted in', 'shown in', 'displayed as'
+    ]
+
+    # Check for exact keyword matches
+    for keyword in visual_keywords:
+        if keyword in query_lower:
+            return True
+
+    # Check for visual question patterns
+    visual_question_patterns = [
+        'what does.*look like',
+        'how does.*appear',
+        'can you show',
+        'is there a.*showing',
+        'does the.*display',
+        'where is the.*graph',
+        'find the.*chart'
+    ]
+
+    import re
+    for pattern in visual_question_patterns:
+        if re.search(pattern, query_lower):
+            return True
+
+    # Check for visual file extensions in queries
+    if any(ext in query_lower for ext in ['.png', '.jpg', '.jpeg', '.svg', '.pdf']):
+        return True
+
+    return False
+
+
+def _is_statistical_query(query: str) -> bool:
+    """
+    Detect if a query is asking for statistical/numerical data from tables.
+
+    Args:
+        query: User query string
+
+    Returns:
+        True if query contains statistical keywords
+    """
+    query_lower = query.lower()
+
+    # Statistical keywords that indicate the query needs table data
+    statistical_keywords = [
+        'p-value', 'p value', 'pvalue', 'p.value',
+        'coefficient', 'coef', 'beta',
+        'correlation', 'r-squared', 'r2', 'r squared',
+        'mean', 'median', 'average', 'std', 'standard deviation',
+        'confidence interval', 'ci', 'conf',
+        't-statistic', 't-stat', 't value',
+        'z-score', 'chi-square',
+        'odds ratio', 'hazard ratio',
+        'regression', 'model',
+        'estimate', 'estimator',
+        'significance', 'significant',
+        'log(', 'ln(', 'exp(',
+        'table', 'row', 'column',
+        'value of', 'value for',
+        'what is the', 'what are the',
+        'find',
+        'number', 'percentage', 'rate'
+    ]
+
+    # Check if query contains any statistical keywords
+    for keyword in statistical_keywords:
+        if keyword in query_lower:
+            return True
+
+    # Check for numeric patterns (e.g., "0.05", "95%")
+    import re
+    if re.search(r'\d+\.?\d*%?', query_lower):
+        return True
+
+    return False
 
 
 @router.post("/upload", response_model=AdvancedUploadResponse)
@@ -117,20 +423,7 @@ async def upload_pdf_advanced(
                     page_number=table_data.get("page", 1),
                     pdf_path=str(tmp_path)  # Pass PDF path for image extraction
                 )
-                
-                # Table descriptions disabled - using simple descriptions
-                # to avoid API quota issues. Uncomment below to enable LLM table descriptions.
-                # try:
-                #     if processed_table.get("table_markdown"):
-                #         llm_description = table_processor.generate_llm_description(
-                #             markdown=processed_table["table_markdown"],
-                #             llm_service=llm_service
-                #         )
-                #         processed_table["text_annotation"] = llm_description
-                #         logger.debug(f"Generated LLM description for table on page {processed_table['page_number']}")
-                # except Exception as e:
-                #     logger.warning(f"Failed to generate LLM description for table: {e}")
-                
+
                 visual_element = {
                     "id": element_id,
                     "document_id": document_id,
@@ -145,7 +438,7 @@ async def upload_pdf_advanced(
                 visual_elements_data.append(visual_element)
                 tables_count += 1
             
-            # Process images with LLM descriptions
+            # Process images with caption-based descriptions
             for image_data in extracted_data.get("images", []):
                 element_id = str(uuid.uuid4())
                 processed_image = image_processor.process_image(
@@ -154,23 +447,7 @@ async def upload_pdf_advanced(
                     element_id=element_id,
                     page_number=image_data.get("page", 1)
                 )
-                
-                # Vision descriptions disabled - using caption-based descriptions
-                # to avoid API quota issues. Uncomment below to enable LLM vision descriptions.
-                # try:
-                #     if processed_image.get("file_path"):
-                #         from app.utils.file_storage import storage
-                #         absolute_path = storage.get_file_path(processed_image["file_path"])
-                #         
-                #         vision_description = image_processor.generate_vision_description(
-                #             image_path=str(absolute_path),
-                #             llm_service=llm_service
-                #         )
-                #         processed_image["text_annotation"] = vision_description
-                #         logger.info(f"Generated vision description for image on page {processed_image['page_number']}")
-                # except Exception as e:
-                #     logger.warning(f"Failed to generate vision description for image: {e}")
-                
+
                 visual_element = {
                     "id": element_id,
                     "document_id": document_id,
@@ -190,11 +467,16 @@ async def upload_pdf_advanced(
                 supabase.table("visual_elements").insert(visual_elements_data).execute()
                 logger.info(f"Stored {len(visual_elements_data)} visual elements")
             
-            # Create semantic chunks
-            logger.info("Creating semantic chunks...")
-            chunker = SemanticChunker(min_chunk_size=500, max_chunk_size=1500)
+            # Create semantic chunks with table enrichment
+            logger.info("Creating semantic chunks with table enrichment...")
+            chunker = SemanticChunker(
+                min_chunk_size=500,
+                max_chunk_size=1500,
+                table_context_window=500
+            )
             chunks = chunker.chunk_document(
                 sections=extracted_data.get("sections", []),
+                tables=extracted_data.get("tables", []),
                 preserve_structure=True
             )
             
@@ -358,23 +640,89 @@ async def query_advanced(
         
         # Embed query
         query_embedding = embedding_service.embed_text(request.query)
-        
-        # Search both collections
+
+        # Detect query type to optimize retrieval
+        is_visual_query = _is_visual_query(request.query)
+        is_statistical_query = _is_statistical_query(request.query)
+
+        # Improved hybrid retrieval strategy based on query type
         top_k = request.top_k or 10
-        text_k = int(top_k * 0.7)  # 70% from text
-        visual_k = int(top_k * 0.3)  # 30% from visual
-        
-        # Search text collection
+
+        if is_visual_query:
+            # For graph/image/chart queries: prioritize visual collection heavily
+            text_k = min(top_k, 5)  # Minimal text
+            visual_k = min(top_k * 2, 20)  # Lots of visuals
+            logger.info(f"Visual query detected (graph/chart/image), retrieving {visual_k} visual candidates")
+        elif is_statistical_query:
+            # For statistical queries: retrieve more candidates to ensure tables are found
+            text_k = min(top_k * 3, 30)
+            visual_k = max(int(top_k * 0.6), 8)
+            logger.info(f"Statistical query detected, retrieving {text_k} text and {visual_k} visual candidates")
+        else:
+            # Standard retrieval
+            text_k = min(top_k * 2, 20)
+            visual_k = max(int(top_k * 0.4), 5)
+
+        # Search text collection (includes table-enriched chunks now)
         text_results = qdrant_service.search_text(
             query_embedding=query_embedding,
             top_k=text_k
         )
-        
+
         # Search visual collection
         visual_results = qdrant_service.search_visual(
             query_embedding=query_embedding,
             top_k=visual_k
         )
+
+        # Re-rank results: boost table-enriched chunks (more aggressive for statistical queries)
+        boost_factor = 1.5 if is_statistical_query else 1.2
+
+        for result in text_results:
+            # Check if this is a table chunk from database
+            chunk_id = result.get("chunk_id")
+            if chunk_id:
+                try:
+                    chunk_data = supabase.table("chunks").select("chunk_type, metadata").eq("id", chunk_id).execute()
+                    if chunk_data.data and len(chunk_data.data) > 0:
+                        chunk_type = chunk_data.data[0].get("chunk_type", "")
+                        # Boost table chunks
+                        if "table" in chunk_type:
+                            result["score"] = result["score"] * boost_factor
+                            logger.debug(f"Boosted table chunk score by {boost_factor}x to {result['score']}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch chunk type: {e}")
+
+        # Re-sort text results after boosting
+        text_results = sorted(text_results, key=lambda x: x["score"], reverse=True)[:top_k]
+
+        # UNIVERSAL HYBRID SEARCH: Apply intelligent term-based table search for ALL queries
+        # This works for ANY query type - statistical, business, medical, technical, etc.
+        logger.info("Applying universal hybrid table search")
+
+        # Extract all meaningful terms from the query (works for ANY domain)
+        query_terms = _extract_query_terms(request.query)
+        logger.info(f"Extracted {len(query_terms)} terms from query: {query_terms[:10]}")
+
+        # Get document IDs from top vector search results
+        top_doc_ids = list(set([r["document_id"] for r in text_results[:5]]))  # Top 5 docs
+
+        if top_doc_ids and query_terms:
+            # Search ALL tables in these documents for the query terms
+            term_matched_tables = _search_tables_by_terms(
+                supabase=supabase,
+                document_ids=top_doc_ids,
+                query_terms=query_terms
+            )
+
+            if term_matched_tables:
+                logger.success(f"Found {len(term_matched_tables)} tables via hybrid term search!")
+                # Inject matched tables into visual results (they already have high scores)
+                for table in term_matched_tables:
+                    # Add to front if not already in results
+                    existing_ids = {v.get("element_id") for v in visual_results}
+                    if table["element_id"] not in existing_ids:
+                        visual_results.insert(0, table)
         
         if not text_results and not visual_results:
             return AdvancedQueryResponse(
@@ -400,13 +748,19 @@ async def query_advanced(
             ve_result = supabase.table("visual_elements").select("*").in_("id", visual_element_ids).execute()
             visual_details = {ve["id"]: ve for ve in ve_result.data}
         
-        # Prepare context for LLM
+        # Prepare enhanced context for LLM with table awareness
         context_chunks = []
-        for result in text_results:
+        for idx, result in enumerate(text_results, 1):
+            chunk_text = result["text"]
+
+            # Add source attribution for better LLM reasoning
+            source_prefix = f"[Source {idx}, Page {result['page']}, {doc_map.get(result['document_id'], 'Unknown')}]\n"
+
             context_chunks.append({
-                "text": result["text"],
+                "text": source_prefix + chunk_text,
                 "page": result["page"],
-                "document_name": doc_map.get(result["document_id"], "Unknown")
+                "document_name": doc_map.get(result["document_id"], "Unknown"),
+                "score": result.get("score", 0)
             })
         
         # Prepare visual elements for LLM
@@ -428,7 +782,7 @@ async def query_advanced(
             context_chunks=context_chunks,
             visual_elements=visual_elements_for_llm
         )
-        
+
         # Prepare source references
         sources = []
         for result in text_results:
@@ -489,7 +843,7 @@ async def query_advanced(
             logger.warning(f"Failed to log query: {log_error}")
         
         logger.success(f"Advanced query completed in {query_time_ms}ms")
-        
+
         return AdvancedQueryResponse(
             answer=answer,
             sources=sources,
