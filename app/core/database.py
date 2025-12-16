@@ -1,5 +1,6 @@
 """Database connection and utilities."""
 
+from typing import Optional
 from supabase import create_client, Client
 from app.core.config import settings
 from loguru import logger
@@ -7,8 +8,8 @@ from loguru import logger
 
 class SupabaseClient:
     """Supabase client singleton."""
-    
-    _instance: Client | None = None
+
+    _instance: Optional[Client] = None
     
     @classmethod
     def get_client(cls) -> Client:

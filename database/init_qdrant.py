@@ -23,7 +23,7 @@ def init_qdrant_collections():
         api_key=qdrant_api_key if qdrant_api_key else None
     )
     
-    embedding_dim = int(os.getenv("EMBEDDING_DIMENSION", "384"))
+    embedding_dim = int(os.getenv("EMBEDDING_DIMENSION", "768"))
     
     collections = [
         {

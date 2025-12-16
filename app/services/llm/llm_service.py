@@ -68,10 +68,14 @@ class LLMService:
                         "role": "system",
                         "content": (
                             "You are an expert data analyst and research assistant. "
-                            "Answer questions precisely based on provided document context, including text, tables, and figures. "
-                            "When tables are present, extract specific values accurately. "
-                            "Pay special attention to statistical data, p-values, confidence intervals, and numerical results. "
-                            "Always cite your sources using [Source N] notation."
+                            "Answer questions by PRIORITIZING the provided document context (text, tables, figures), "
+                            "but you may also use your general knowledge when:\n"
+                            "  - The context is incomplete or doesn't fully answer the question\n"
+                            "  - The question asks for well-known facts that aren't in the context\n"
+                            "  - Additional context from your knowledge enhances understanding\n\n"
+                            "When using context: Extract specific values accurately, cite sources with [Source N].\n"
+                            "When using general knowledge: Clearly state 'Based on general knowledge' or similar.\n"
+                            "Combine both intelligently for comprehensive answers."
                         )
                     },
                     {
@@ -132,12 +136,12 @@ class LLMService:
     
     def _create_prompt(self, question: str, context: str) -> str:
         """Create enhanced prompt for answer generation with multimodal awareness."""
-        prompt = f"""Context from documents (including tables, images, charts, and figures):
+        prompt = f"""Document Context (including tables, images, charts, and figures):
 {context}
 
 Question: {question}
 
-MULTIMODAL ANSWER INSTRUCTIONS - INTEGRATE VISUAL AND TEXT CONTENT:
+ANSWER INSTRUCTIONS:
 
 1. VISUAL ELEMENT DETECTION:
    - Look for [Source N] entries that mention "table", "chart", "graph", "figure", "image"
@@ -182,7 +186,12 @@ MULTIMODAL ANSWER INSTRUCTIONS - INTEGRATE VISUAL AND TEXT CONTENT:
    - Don't approximate unless explicitly stated
    - If visual shows a clear trend/pattern, describe it accurately
 
-Answer comprehensively, integrating both text and visual information:"""
+8. HANDLING INCOMPLETE CONTEXT:
+   - If the context doesn't fully answer the question, use your general knowledge
+   - Clearly distinguish between context-based and knowledge-based information
+   - Provide comprehensive answers by intelligently combining both sources
+
+Answer comprehensively using the context AND your knowledge as needed:"""
 
         return prompt
     

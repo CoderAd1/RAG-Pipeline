@@ -7,13 +7,13 @@ from loguru import logger
 class FixedSizeChunker:
     """Fixed-size text chunking for basic RAG."""
 
-    def __init__(self, chunk_size: int = 1000, overlap: int = 200):
+    def __init__(self, chunk_size: int = 1500, overlap: int = 300):
         """
         Initialize fixed-size chunker.
 
         Args:
-            chunk_size: Maximum characters per chunk
-            overlap: Number of overlapping characters between chunks
+            chunk_size: Maximum characters per chunk (default: 1500, increased from 1000)
+            overlap: Number of overlapping characters between chunks (default: 300, increased from 200)
         """
         self.chunk_size = chunk_size
         self.overlap = overlap
@@ -74,17 +74,17 @@ class SemanticChunker:
 
     def __init__(
         self,
-        min_chunk_size: int = 500,
-        max_chunk_size: int = 1500,
-        table_context_window: int = 500
+        min_chunk_size: int = 800,
+        max_chunk_size: int = 2000,
+        table_context_window: int = 800
     ):
         """
         Initialize semantic chunker.
 
         Args:
-            min_chunk_size: Minimum characters per chunk
-            max_chunk_size: Maximum characters per chunk
-            table_context_window: Characters of context to include around tables
+            min_chunk_size: Minimum characters per chunk (default: 800, increased from 500)
+            max_chunk_size: Maximum characters per chunk (default: 2000, increased from 1500)
+            table_context_window: Characters of context to include around tables (default: 800, increased from 500)
         """
         self.min_chunk_size = min_chunk_size
         self.max_chunk_size = max_chunk_size
