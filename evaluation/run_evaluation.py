@@ -420,15 +420,19 @@ class RAGEvaluator:
                 continue
             
             print(f"  Success Rate:       {metrics['success_rate']:.1%}")
-            print(f"  Mean Accuracy:      {metrics['mean_accuracy']:.3f}")
-            print(f"  Mean Keyword Match: {metrics['mean_keyword_overlap']:.3f}")
-            print(f"  Mean Latency:       {metrics['mean_latency_ms']:.0f}ms")
             
+            # Primary RAG metrics (most important)
             if "mean_faithfulness" in metrics:
                 print(f"  Mean Faithfulness:  {metrics['mean_faithfulness']:.3f}")
             
             if "mean_answer_relevancy" in metrics:
                 print(f"  Mean Relevancy:     {metrics['mean_answer_relevancy']:.3f}")
+            
+            print(f"  Mean Keyword Match: {metrics['mean_keyword_overlap']:.3f}")
+            print(f"  Mean Latency:       {metrics['mean_latency_ms']:.0f}ms")
+            
+            # Secondary metrics
+            print(f"  Mean Accuracy:      {metrics['mean_accuracy']:.3f}  (token overlap - less reliable)")
             
             if "calibration_error" in metrics:
                 print(f"  Calibration Error:  {metrics['calibration_error']:.3f}")

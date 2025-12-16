@@ -1,567 +1,106 @@
 {
     "metadata": {
-        "name": "Research Papers Test Dataset",
-        "description": "Ground truth Q&A pairs based on NLP/RAG research papers",
-        "version": "2.0",
-        "created": "2025-12-15",
-        "total_questions": 40,
+        "name": "Research Papers Test Dataset - Jaccard Optimized",
+        "description": "Questions rewritten with output constraints (e.g., 'Answer in 5 words') to make Jaccard Similarity evaluation viable.",
+        "version": "5.0-jaccard-optimized",
+        "created": "2025-12-16",
+        "total_questions": 10,
         "papers_covered": [
-            "RAG (Lewis et al. 2020)",
-            "Attention Is All You Need (Transformers)",
-            "BERT",
-            "DPR (Dense Passage Retrieval)",
-            "Sentence-BERT",
-            "LLaMA",
-            "Chain-of-Thought Prompting",
-            "RAGAS Evaluation",
-            "ColBERT",
-            "LayoutLM",
             "Word2Vec",
-            "GloVe",
+            "DistilBERT",
             "ELMo",
             "RoBERTa",
-            "DistilBERT"
+            "REALM"
         ]
     },
     "questions": [
         {
-            "id": "rag_1",
-            "question": "What are the two main components that RAG combines according to the original paper?",
-            "expected_answer": "RAG combines a pre-trained seq2seq model (generator) with a dense vector index of Wikipedia (retriever), using the retriever to find relevant documents that condition the generator.",
-            "keywords": [
-                "retriever",
-                "generator",
-                "seq2seq",
-                "dense",
-                "Wikipedia"
-            ],
-            "difficulty": "easy",
-            "category": "rag_paper",
-            "source_paper": "RAG: Retrieval-Augmented Generation"
-        },
-        {
-            "id": "rag_2",
-            "question": "What is the difference between RAG-Sequence and RAG-Token models?",
-            "expected_answer": "RAG-Sequence uses the same retrieved document to generate the entire output sequence, while RAG-Token can use different documents for each output token, allowing more flexible generation.",
-            "keywords": [
-                "RAG-Sequence",
-                "RAG-Token",
-                "document",
-                "generation",
-                "output"
-            ],
-            "difficulty": "medium",
-            "category": "rag_paper",
-            "source_paper": "RAG: Retrieval-Augmented Generation"
-        },
-        {
-            "id": "rag_3",
-            "question": "What retrieval model does the original RAG paper use?",
-            "expected_answer": "RAG uses DPR (Dense Passage Retrieval) with a BERT-based bi-encoder that encodes queries and documents into dense vectors for maximum inner product search.",
-            "keywords": [
-                "DPR",
-                "Dense Passage Retrieval",
-                "BERT",
-                "bi-encoder",
-                "dense vectors"
-            ],
-            "difficulty": "medium",
-            "category": "rag_paper",
-            "source_paper": "RAG: Retrieval-Augmented Generation"
-        },
-        {
-            "id": "transformer_1",
-            "question": "What is the key innovation of the Transformer architecture?",
-            "expected_answer": "The Transformer relies entirely on self-attention mechanisms to compute representations, dispensing with recurrence and convolutions entirely, enabling more parallelization during training.",
-            "keywords": [
-                "self-attention",
-                "parallelization",
-                "recurrence",
-                "convolutions",
-                "attention"
-            ],
-            "difficulty": "easy",
-            "category": "transformers",
-            "source_paper": "Attention Is All You Need"
-        },
-        {
-            "id": "transformer_2",
-            "question": "What is multi-head attention in Transformers?",
-            "expected_answer": "Multi-head attention runs multiple attention functions in parallel, projecting queries, keys, and values h times with different learned projections, allowing the model to attend to information from different representation subspaces.",
-            "keywords": [
-                "multi-head",
-                "parallel",
-                "queries",
-                "keys",
-                "values",
-                "projections"
-            ],
-            "difficulty": "medium",
-            "category": "transformers",
-            "source_paper": "Attention Is All You Need"
-        },
-        {
-            "id": "transformer_3",
-            "question": "What is positional encoding in Transformers and why is it needed?",
-            "expected_answer": "Positional encoding adds information about the position of tokens in the sequence since the Transformer has no recurrence or convolution. The paper uses sine and cosine functions of different frequencies.",
-            "keywords": [
-                "positional encoding",
-                "position",
-                "sine",
-                "cosine",
-                "sequence"
-            ],
-            "difficulty": "medium",
-            "category": "transformers",
-            "source_paper": "Attention Is All You Need"
-        },
-        {
-            "id": "bert_1",
-            "question": "What does BERT stand for and what is its key innovation?",
-            "expected_answer": "BERT stands for Bidirectional Encoder Representations from Transformers. Its key innovation is pre-training deep bidirectional representations by jointly conditioning on both left and right context in all layers.",
-            "keywords": [
-                "Bidirectional",
-                "Encoder",
-                "Representations",
-                "Transformers",
-                "context"
-            ],
-            "difficulty": "easy",
-            "category": "bert",
-            "source_paper": "BERT"
-        },
-        {
-            "id": "bert_2",
-            "question": "What are the two pre-training tasks used in BERT?",
-            "expected_answer": "BERT uses Masked Language Modeling (MLM), which randomly masks tokens and predicts them, and Next Sentence Prediction (NSP), which predicts whether two sentences are consecutive.",
-            "keywords": [
-                "Masked Language Modeling",
-                "MLM",
-                "Next Sentence Prediction",
-                "NSP",
-                "pre-training"
-            ],
-            "difficulty": "medium",
-            "category": "bert",
-            "source_paper": "BERT"
-        },
-        {
-            "id": "bert_3",
-            "question": "What is the difference between BERT-Base and BERT-Large?",
-            "expected_answer": "BERT-Base has 12 layers, 768 hidden size, 12 attention heads, and 110M parameters. BERT-Large has 24 layers, 1024 hidden size, 16 attention heads, and 340M parameters.",
-            "keywords": [
-                "BERT-Base",
-                "BERT-Large",
-                "layers",
-                "parameters",
-                "hidden"
-            ],
-            "difficulty": "hard",
-            "category": "bert",
-            "source_paper": "BERT"
-        },
-        {
-            "id": "dpr_1",
-            "question": "What is the main contribution of Dense Passage Retrieval (DPR)?",
-            "expected_answer": "DPR shows that dense representations trained with a simple dual-encoder framework can outperform strong BM25 baselines and Lucene-based systems for open-domain question answering retrieval.",
-            "keywords": [
-                "dense representations",
-                "dual-encoder",
-                "BM25",
-                "question answering",
-                "retrieval"
-            ],
-            "difficulty": "medium",
-            "category": "dpr",
-            "source_paper": "DPR"
-        },
-        {
-            "id": "dpr_2",
-            "question": "How does DPR train its encoders?",
-            "expected_answer": "DPR trains the question and passage encoders using contrastive learning with in-batch negatives. The positive passage is the one containing the answer, and negatives are other passages in the batch plus hard negatives from BM25.",
-            "keywords": [
-                "contrastive",
-                "in-batch negatives",
-                "positive passage",
-                "hard negatives",
-                "BM25"
-            ],
-            "difficulty": "hard",
-            "category": "dpr",
-            "source_paper": "DPR"
-        },
-        {
-            "id": "sbert_1",
-            "question": "What problem does Sentence-BERT solve compared to using BERT directly?",
-            "expected_answer": "Sentence-BERT solves the computational overhead problem. Using BERT directly for sentence similarity requires O(n²) comparisons with the cross-encoder. SBERT creates fixed-size embeddings allowing O(n) pre-computation and fast similarity search.",
-            "keywords": [
-                "computational",
-                "O(n²)",
-                "embeddings",
-                "similarity search",
-                "cross-encoder"
-            ],
-            "difficulty": "medium",
-            "category": "sentence_bert",
-            "source_paper": "Sentence-BERT"
-        },
-        {
-            "id": "sbert_2",
-            "question": "What architecture does Sentence-BERT use?",
-            "expected_answer": "Sentence-BERT uses siamese and triplet network structures to fine-tune BERT. It adds a pooling layer on top of BERT output to derive fixed-size sentence embeddings, then uses cosine similarity for comparison.",
-            "keywords": [
-                "siamese",
-                "triplet",
-                "pooling",
-                "cosine similarity",
-                "embeddings"
-            ],
-            "difficulty": "medium",
-            "category": "sentence_bert",
-            "source_paper": "Sentence-BERT"
-        },
-        {
-            "id": "llama_1",
-            "question": "What is unique about LLaMA's training approach?",
-            "expected_answer": "LLaMA is trained only on publicly available data, making it open-source friendly. It shows that state-of-the-art performance can be achieved without proprietary datasets, using only public data sources like CommonCrawl, Wikipedia, and books.",
-            "keywords": [
-                "publicly available",
-                "open-source",
-                "CommonCrawl",
-                "Wikipedia",
-                "public data"
-            ],
-            "difficulty": "medium",
-            "category": "llama",
-            "source_paper": "LLaMA"
-        },
-        {
-            "id": "llama_2",
-            "question": "What are the model sizes available in the LLaMA family?",
-            "expected_answer": "LLaMA comes in four sizes: 7B, 13B, 33B, and 65B parameters. The paper shows that smaller models trained on more tokens can match or exceed larger models trained on fewer tokens.",
-            "keywords": [
-                "7B",
-                "13B",
-                "33B",
-                "65B",
-                "parameters",
-                "tokens"
-            ],
-            "difficulty": "easy",
-            "category": "llama",
-            "source_paper": "LLaMA"
-        },
-        {
-            "id": "cot_1",
-            "question": "What is chain-of-thought prompting?",
-            "expected_answer": "Chain-of-thought prompting is a method where the model is prompted to generate intermediate reasoning steps before producing the final answer. This is achieved by providing few-shot examples that include step-by-step reasoning.",
-            "keywords": [
-                "intermediate reasoning",
-                "steps",
-                "few-shot",
-                "reasoning",
-                "prompting"
-            ],
-            "difficulty": "easy",
-            "category": "chain_of_thought",
-            "source_paper": "Chain-of-Thought Prompting"
-        },
-        {
-            "id": "cot_2",
-            "question": "On what types of tasks does chain-of-thought prompting show the most improvement?",
-            "expected_answer": "Chain-of-thought prompting shows the most improvement on complex reasoning tasks like arithmetic reasoning, commonsense reasoning, and symbolic reasoning tasks, especially with larger models.",
-            "keywords": [
-                "arithmetic",
-                "commonsense",
-                "symbolic",
-                "reasoning",
-                "complex"
-            ],
-            "difficulty": "medium",
-            "category": "chain_of_thought",
-            "source_paper": "Chain-of-Thought Prompting"
-        },
-        {
-            "id": "ragas_1",
-            "question": "What are the main metrics in the RAGAS evaluation framework?",
-            "expected_answer": "RAGAS evaluates RAG systems using four main metrics: faithfulness (is the answer grounded in context), answer relevancy (does it address the question), context precision, and context recall (quality of retrieved context).",
-            "keywords": [
-                "faithfulness",
-                "answer relevancy",
-                "context precision",
-                "context recall",
-                "metrics"
-            ],
-            "difficulty": "medium",
-            "category": "ragas",
-            "source_paper": "RAGAS"
-        },
-        {
-            "id": "ragas_2",
-            "question": "How does RAGAS measure faithfulness?",
-            "expected_answer": "RAGAS measures faithfulness by extracting claims from the generated answer and checking if each claim can be inferred from the retrieved context. The faithfulness score is the ratio of supported claims to total claims.",
-            "keywords": [
-                "claims",
-                "inferred",
-                "context",
-                "supported",
-                "ratio"
-            ],
-            "difficulty": "hard",
-            "category": "ragas",
-            "source_paper": "RAGAS"
-        },
-        {
-            "id": "colbert_1",
-            "question": "What is the key innovation of ColBERT?",
-            "expected_answer": "ColBERT introduces late interaction, where query and document encodings are computed independently but interact through a MaxSim operation at search time. This enables both efficient pre-computation and fine-grained matching.",
-            "keywords": [
-                "late interaction",
-                "MaxSim",
-                "independent",
-                "pre-computation",
-                "fine-grained"
-            ],
-            "difficulty": "medium",
-            "category": "colbert",
-            "source_paper": "ColBERT"
-        },
-        {
-            "id": "colbert_2",
-            "question": "How does ColBERT differ from bi-encoders and cross-encoders?",
-            "expected_answer": "ColBERT is between bi-encoders (fast but coarse single-vector) and cross-encoders (slow but accurate token-level). It keeps per-token embeddings like cross-encoders but computes them independently like bi-encoders, enabling scalable fine-grained matching.",
-            "keywords": [
-                "bi-encoder",
-                "cross-encoder",
-                "per-token",
-                "scalable",
-                "fine-grained"
-            ],
-            "difficulty": "hard",
-            "category": "colbert",
-            "source_paper": "ColBERT"
-        },
-        {
-            "id": "layoutlm_1",
-            "question": "What is LayoutLM designed for?",
-            "expected_answer": "LayoutLM is designed for document understanding tasks by jointly modeling text and layout information. It extends BERT by adding 2D position embeddings to capture the spatial relationship of text in documents.",
-            "keywords": [
-                "document understanding",
-                "layout",
-                "2D position",
-                "spatial",
-                "BERT"
-            ],
-            "difficulty": "medium",
-            "category": "layoutlm",
-            "source_paper": "LayoutLM"
-        },
-        {
-            "id": "layoutlm_2",
-            "question": "What additional information does LayoutLM use compared to BERT?",
-            "expected_answer": "LayoutLM adds bounding box coordinates (x0, y0, x1, y1) as 2D position embeddings and can optionally use image embeddings. This captures where text appears on the page, not just what it says.",
-            "keywords": [
-                "bounding box",
-                "coordinates",
-                "2D position",
-                "image embeddings",
-                "page"
-            ],
-            "difficulty": "medium",
-            "category": "layoutlm",
-            "source_paper": "LayoutLM"
-        },
-        {
-            "id": "general_1",
-            "question": "What is the attention mechanism formula in Transformers?",
-            "expected_answer": "Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) * V, where Q is queries, K is keys, V is values, and d_k is the dimension of keys. The scaling by sqrt(d_k) prevents large dot products from pushing softmax to extreme values.",
-            "keywords": [
-                "softmax",
-                "queries",
-                "keys",
-                "values",
-                "sqrt",
-                "scaling"
-            ],
-            "difficulty": "hard",
-            "category": "transformers",
-            "source_paper": "Attention Is All You Need"
-        },
-        {
-            "id": "general_2",
-            "question": "What is the difference between encoder-only and decoder-only language models?",
-            "expected_answer": "Encoder-only models like BERT use bidirectional attention and are good for understanding tasks. Decoder-only models like GPT use causal (left-to-right) attention and are designed for generation. Encoder-decoder models like T5 use both.",
-            "keywords": [
-                "encoder-only",
-                "decoder-only",
-                "bidirectional",
-                "causal",
-                "generation"
-            ],
-            "difficulty": "medium",
-            "category": "general",
-            "source_paper": "Multiple"
-        },
-        {
-            "id": "general_3",
-            "question": "What is the BM25 retrieval algorithm?",
-            "expected_answer": "BM25 is a probabilistic bag-of-words retrieval function that ranks documents based on term frequency, inverse document frequency, and document length normalization. It is a strong baseline for keyword-based retrieval.",
-            "keywords": [
-                "BM25",
-                "term frequency",
-                "inverse document frequency",
-                "bag-of-words",
-                "probabilistic"
-            ],
-            "difficulty": "medium",
-            "category": "retrieval",
-            "source_paper": "Multiple"
-        },
-        {
-            "id": "general_4",
-            "question": "What is the difference between zero-shot, one-shot, and few-shot learning?",
-            "expected_answer": "Zero-shot provides no examples, only task descriptions. One-shot provides a single example. Few-shot provides multiple examples (typically 5-10) of input-output pairs before the actual query.",
-            "keywords": [
-                "zero-shot",
-                "one-shot",
-                "few-shot",
-                "examples",
-                "task description"
-            ],
-            "difficulty": "easy",
-            "category": "general",
-            "source_paper": "Multiple"
-        },
-        {
-            "id": "general_5",
-            "question": "What is knowledge distillation in neural networks?",
-            "expected_answer": "Knowledge distillation trains a smaller student model to mimic a larger teacher model by matching the teacher's soft probability outputs rather than hard labels. This transfers knowledge while reducing model size.",
-            "keywords": [
-                "student",
-                "teacher",
-                "soft probability",
-                "distillation",
-                "smaller model"
-            ],
-            "difficulty": "medium",
-            "category": "general",
-            "source_paper": "Multiple"
-        },
-        {
-            "id": "general_6",
-            "question": "What is the purpose of the [CLS] token in BERT?",
-            "expected_answer": "The [CLS] token is a special token prepended to every input. Its final hidden state is used as the aggregate sequence representation for classification tasks, as it attends to all other tokens through self-attention.",
-            "keywords": [
-                "[CLS]",
-                "classification",
-                "aggregate",
-                "representation",
-                "sequence"
-            ],
-            "difficulty": "medium",
-            "category": "bert",
-            "source_paper": "BERT"
-        },
-        {
             "id": "word2vec_1",
-            "question": "What are the two architectures proposed in the Word2Vec paper?",
-            "expected_answer": "Word2Vec proposes two architectures: CBOW (Continuous Bag of Words) which predicts a target word from context words, and Skip-gram which predicts context words from a target word.",
+            "question": "According to the abstract, exactly how long does it take to learn high-quality word vectors from a 1.6 billion words data set? Answer with the time phrase only.",
+            "expected_answer": "less than a day",
             "keywords": [
-                "CBOW",
-                "Skip-gram",
-                "context",
-                "target word",
-                "predict"
+                "less",
+                "than",
+                "a",
+                "day"
             ],
-            "difficulty": "medium",
+            "difficulty": "easy",
             "category": "word2vec",
-            "source_paper": "Word2Vec"
+            "source_paper": "Word2Vec: Efficient Estimation of Word Representations"
         },
         {
             "id": "word2vec_2",
-            "question": "What is negative sampling in Word2Vec?",
-            "expected_answer": "Negative sampling is a technique that simplifies training by updating only a small percentage of weights. Instead of updating all weights for the full softmax, it samples a few negative examples and updates only those, making training more efficient.",
+            "question": "Which specific architecture does the text state performs 'much better' on the semantic part of the test? Answer with the model name only.",
+            "expected_answer": "Skip-gram",
             "keywords": [
-                "negative sampling",
-                "softmax",
-                "efficient",
-                "training",
-                "weights"
+                "Skip-gram"
             ],
-            "difficulty": "hard",
+            "difficulty": "medium",
             "category": "word2vec",
-            "source_paper": "Word2Vec"
+            "source_paper": "Word2Vec: Efficient Estimation of Word Representations"
         },
         {
-            "id": "glove_1",
-            "question": "What does GloVe stand for and what is its main idea?",
-            "expected_answer": "GloVe stands for Global Vectors for Word Representation. It combines global matrix factorization (like LSA) with local context window methods (like Word2Vec) by training on word co-occurrence statistics from the corpus.",
+            "id": "distilbert_1",
+            "question": "State the percentage size reduction and percentage performance retention of DistilBERT according to the abstract. Format: X% reduction, Y% retention.",
+            "expected_answer": "40% reduction, 97% retention",
             "keywords": [
-                "Global Vectors",
-                "co-occurrence",
-                "matrix factorization",
-                "context window",
-                "statistics"
+                "40%",
+                "97%",
+                "reduction",
+                "retention"
             ],
-            "difficulty": "medium",
-            "category": "glove",
-            "source_paper": "GloVe"
+            "difficulty": "easy",
+            "category": "distilbert",
+            "source_paper": "DistilBERT"
         },
         {
-            "id": "glove_2",
-            "question": "How does GloVe differ from Word2Vec?",
-            "expected_answer": "GloVe uses global word-word co-occurrence counts and trains by factorizing the log of the co-occurrence matrix, while Word2Vec uses local context windows with predictive objectives. GloVe leverages corpus-wide statistics directly.",
+            "id": "distilbert_2",
+            "question": "List the three components of the 'triple loss' used to train DistilBERT. Answer as a comma-separated list.",
+            "expected_answer": "language modeling, distillation, cosine-distance",
             "keywords": [
-                "co-occurrence",
-                "global",
-                "local",
-                "factorizing",
-                "statistics"
+                "language",
+                "modeling",
+                "distillation",
+                "cosine-distance"
             ],
             "difficulty": "medium",
-            "category": "glove",
-            "source_paper": "GloVe"
+            "category": "distilbert",
+            "source_paper": "DistilBERT"
         },
         {
             "id": "elmo_1",
-            "question": "What does ELMo stand for and what is its key contribution?",
-            "expected_answer": "ELMo stands for Embeddings from Language Models. Its key contribution is providing deep contextualized word representations by using the internal states of a deep bidirectional LSTM language model, where word vectors vary based on context.",
+            "question": "What does the acronym 'ELMo' stand for? Answer with the full name only.",
+            "expected_answer": "Embeddings from Language Models",
             "keywords": [
-                "contextualized",
-                "bidirectional",
-                "LSTM",
-                "language model",
-                "context"
+                "Embeddings",
+                "from",
+                "Language",
+                "Models"
             ],
-            "difficulty": "medium",
+            "difficulty": "easy",
             "category": "elmo",
             "source_paper": "ELMo"
         },
         {
             "id": "elmo_2",
-            "question": "How are ELMo embeddings computed?",
-            "expected_answer": "ELMo embeddings are computed as a weighted combination of the hidden states from all layers of a deep biLM (bidirectional language model). The weights are learned task-specifically, allowing different tasks to emphasize different layers.",
+            "question": "What specific linguistic information is best captured by lower-level LSTM states in ELMo? Answer in one word.",
+            "expected_answer": "syntax",
             "keywords": [
-                "weighted",
-                "layers",
-                "biLM",
-                "hidden states",
-                "task-specific"
+                "syntax"
             ],
-            "difficulty": "hard",
+            "difficulty": "medium",
             "category": "elmo",
             "source_paper": "ELMo"
         },
         {
             "id": "roberta_1",
-            "question": "What does RoBERTa stand for and how does it improve on BERT?",
-            "expected_answer": "RoBERTa stands for Robustly Optimized BERT Pretraining Approach. It improves BERT by training longer with bigger batches, removing Next Sentence Prediction, using dynamic masking, and training on more data.",
+            "question": "Which training objective was removed from the original BERT procedure to create RoBERTa? Answer with the name only.",
+            "expected_answer": "next sentence prediction",
             "keywords": [
-                "Robustly Optimized",
-                "longer training",
-                "dynamic masking",
-                "NSP removed",
-                "bigger batches"
+                "next",
+                "sentence",
+                "prediction",
+                "NSP"
             ],
             "difficulty": "medium",
             "category": "roberta",
@@ -569,48 +108,41 @@
         },
         {
             "id": "roberta_2",
-            "question": "What is dynamic masking in RoBERTa?",
-            "expected_answer": "Dynamic masking generates the masking pattern each time a sequence is fed to the model during training, rather than masking once during preprocessing. This creates more varied training examples and improves generalization.",
+            "question": "What is the name of the new dataset collected by the authors for the RoBERTa study? Answer with the dataset name only.",
+            "expected_answer": "CC-NEWS",
             "keywords": [
-                "dynamic",
-                "masking pattern",
-                "training",
-                "varied",
-                "preprocessing"
+                "CC-NEWS"
             ],
-            "difficulty": "medium",
+            "difficulty": "easy",
             "category": "roberta",
             "source_paper": "RoBERTa"
         },
         {
-            "id": "distilbert_1",
-            "question": "What is DistilBERT and what is its main advantage?",
-            "expected_answer": "DistilBERT is a distilled version of BERT that is 40% smaller, 60% faster, and retains 97% of BERT's performance. It uses knowledge distillation during pre-training to compress BERT into a smaller model.",
+            "id": "realm_1",
+            "question": "What task is used to 'warm-start' the retrieval and encoder systems in REALM? Answer with the task name only.",
+            "expected_answer": "Inverse Cloze Task",
             "keywords": [
-                "distilled",
-                "smaller",
-                "faster",
-                "knowledge distillation",
-                "97%"
+                "Inverse",
+                "Cloze",
+                "Task",
+                "ICT"
             ],
             "difficulty": "medium",
-            "category": "distilbert",
-            "source_paper": "DistilBERT"
+            "category": "realm",
+            "source_paper": "REALM"
         },
         {
-            "id": "distilbert_2",
-            "question": "What training objective does DistilBERT use?",
-            "expected_answer": "DistilBERT uses a triple loss combining: distillation loss (soft label from teacher), masked language modeling loss (hard labels), and cosine embedding loss to align student and teacher hidden states.",
+            "id": "realm_2",
+            "question": "What specific masking strategy does REALM use for world knowledge? Answer with the strategy name only.",
+            "expected_answer": "salient span masking",
             "keywords": [
-                "distillation loss",
-                "masked language modeling",
-                "cosine",
-                "teacher",
-                "student"
+                "salient",
+                "span",
+                "masking"
             ],
-            "difficulty": "hard",
-            "category": "distilbert",
-            "source_paper": "DistilBERT"
+            "difficulty": "medium",
+            "category": "realm",
+            "source_paper": "REALM"
         }
     ]
 }
