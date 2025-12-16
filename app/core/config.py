@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     
     # LLM API Keys
     groq_api_key: str = Field(..., env="GROQ_API_KEY")
-    google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")  # Optional, for vision tasks
     
     # Application
     environment: Literal["development", "production"] = Field(default="development", env="ENVIRONMENT")
@@ -40,7 +39,7 @@ class Settings(BaseSettings):
     
     # Storage
     storage_path: str = Field(default="./storage", env="STORAGE_PATH")
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False
