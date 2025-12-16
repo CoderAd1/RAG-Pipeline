@@ -96,41 +96,111 @@ function AdvancedQuery() {
 
                     {result.visual_elements && result.visual_elements.length > 0 && (
                         <div className="sources-section">
-                            <h3>Visual Elements ({result.visual_elements.length})</h3>
-                            {result.visual_elements.map((visual, index) => (
-                                <div key={index} className="visual-item">
-                                    <div className="visual-header">
-                                        <div className="source-meta">
-                                            <strong>{visual.element_type.toUpperCase()}</strong>
-                                            <span className="badge">Page {visual.page_number}</span>
-                                            <span className="badge score-badge">
-                                                {(visual.relevance_score * 100).toFixed(1)}%
-                                            </span>
+                            <h3>📊 Visual Elements ({result.visual_elements.length})</h3>
+                            <div className="visual-gallery">
+                                {result.visual_elements.map((visual, index) => (
+                                    <div key={index} className="visual-item-card">
+                                        <div className="visual-header">
+                                            <div className="source-meta">
+                                                <strong>{visual.element_type.toUpperCase()}</strong>
+                                                <span className="badge">Page {visual.page_number}</span>
+                                                <span className="badge score-badge">
+                                                    {(visual.relevance_score * 100).toFixed(1)}%
+                                                </span>
+                                            </div>
                                         </div>
-                                        <span className="visual-type">{visual.element_type}</span>
+
+                                        <div className="visual-description">
+                                            {visual.description}
+                                        </div>
+
+                                        {visual.image_url && (
+                                            <div className="visual-image-container">
+                                                <img
+                                                    src={visual.image_url}
+                                                    alt={visual.description || `${visual.element_type} from page ${visual.page_number}`}
+                                                    className="visual-image-display"
+                                                    onClick={() => window.open(visual.image_url, '_blank')}
+                                                    title="Click to view full size"
+                                                />
+                                                <div className="image-overlay">
+                                                    🔍 Click to enlarge
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {visual.table_markdown && (
+                                            <div className="table-preview">
+                                                <details>
+                                                    <summary>📋 View Table Data</summary>
+                                                    <pre className="table-markdown">{visual.table_markdown}</pre>
+                                                </details>
+                                            </div>
+                                        )}
+
+                                        {visual.file_path && !visual.image_url && (
+                                            <div className="file-reference">
+                                                📎 {visual.file_path.split('/').pop()}
+                                            </div>
+                                        )}
                                     </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-                                    <div className="source-snippet">
-                                        <strong>Description:</strong> {visual.description}
+                    {result.generated_charts && result.generated_charts.length > 0 && (
+                        <div className="sources-section">
+                            <h3>📈 Generated Charts ({result.generated_charts.length})</h3>
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                Dynamically created visualizations based on your query
+                            </p>
+                            <div className="visual-gallery">
+                                {result.generated_charts.map((chart, index) => (
+                                    <div key={index} className="visual-item-card generated-chart-card">
+                                        <div className="visual-header">
+                                            <div className="source-meta">
+                                                <strong>🎨 {chart.chart_type.toUpperCase()}</strong>
+                                                <span className="badge" style={{ background: 'var(--accent-color)' }}>
+                                                    Generated
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="visual-description">
+                                            📊 Data source: {chart.data_source}
+                                        </div>
+
+                                        {chart.image_url && (
+                                            <div className="visual-image-container" style={{ marginTop: '1rem' }}>
+                                                <img
+                                                    src={chart.image_url}
+                                                    alt={`Generated ${chart.chart_type}`}
+                                                    className="visual-image-display"
+                                                    onClick={() => window.open(chart.image_url, '_blank')}
+                                                    title="Click to view full size"
+                                                    style={{
+                                                        border: '2px solid var(--accent-color)',
+                                                        boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)'
+                                                    }}
+                                                />
+                                                <div className="image-overlay">
+                                                    🔍 Click to enlarge
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div style={{
+                                            marginTop: '0.75rem',
+                                            fontSize: '0.85rem',
+                                            color: 'var(--text-muted)',
+                                            fontStyle: 'italic'
+                                        }}>
+                                            Method: {chart.generation_method.replace('_', ' ')}
+                                        </div>
                                     </div>
-
-                                    {visual.image_url && (
-                                        <div className="visual-image-container">
-                                            <img
-                                                src={visual.image_url}
-                                                alt={visual.description || `${visual.element_type} from page ${visual.page_number}`}
-                                                className="visual-image-thumbnail"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {visual.file_path && !visual.image_url && (
-                                        <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                                            📎 File: {visual.file_path}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     )}
 
