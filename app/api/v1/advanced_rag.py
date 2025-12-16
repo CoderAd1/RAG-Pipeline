@@ -429,6 +429,7 @@ async def upload_pdf_advanced(
                     "document_id": document_id,
                     "element_type": "table",
                     "page_number": processed_table["page_number"],
+                    "bounding_box": None,
                     "file_path": processed_table.get("file_path"),  # Table image path
                     "table_markdown": processed_table.get("table_markdown"),
                     "text_annotation": processed_table["text_annotation"],
@@ -455,6 +456,7 @@ async def upload_pdf_advanced(
                     "page_number": processed_image["page_number"],
                     "bounding_box": processed_image.get("bounding_box"),
                     "file_path": processed_image.get("file_path"),
+                    "table_markdown": None,
                     "text_annotation": processed_image["text_annotation"],
                     "ingestion_type": "advanced",
                     "metadata": processed_image.get("metadata", {})
@@ -531,6 +533,7 @@ async def upload_pdf_advanced(
             for chunk_id, vector_id in zip([c["id"] for c in stored_chunks], text_vector_ids):
                 text_embedding_records.append({
                     "chunk_id": chunk_id,
+                    "visual_element_id": None,
                     "collection_name": "advanced_text_collection",
                     "vector_id": vector_id,
                     "embedding_model": embedding_service.get_model_name(),
@@ -569,6 +572,7 @@ async def upload_pdf_advanced(
                 visual_embedding_records = []
                 for ve_id, vector_id in zip([ve["id"] for ve in visual_elements_data], visual_vector_ids):
                     visual_embedding_records.append({
+                        "chunk_id": None,
                         "visual_element_id": ve_id,
                         "collection_name": "advanced_visual_collection",
                         "vector_id": vector_id,

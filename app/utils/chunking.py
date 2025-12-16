@@ -285,7 +285,7 @@ class SemanticChunker:
             "text": combined_text,
             "page_number": page_num,
             "chunk_index": chunk_index,
-            "chunk_type": "table_enriched",
+            "chunk_type": "table_context",
             "metadata": {
                 "section_type": "table",
                 "has_table": True,
