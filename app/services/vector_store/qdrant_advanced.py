@@ -152,12 +152,12 @@ class QdrantAdvancedService:
                 ]
             )
         
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.TEXT_COLLECTION,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=query_filter
-        )
+        ).points
         
         formatted_results = []
         for result in results:
@@ -204,12 +204,12 @@ class QdrantAdvancedService:
         
         query_filter = Filter(must=filters) if filters else None
         
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.VISUAL_COLLECTION,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=query_filter
-        )
+        ).points
         
         formatted_results = []
         for result in results:
