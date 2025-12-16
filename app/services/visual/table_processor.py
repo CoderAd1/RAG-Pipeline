@@ -1,6 +1,6 @@
 """Table processing and description generation."""
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 import json
 from loguru import logger
 from app.utils.file_storage import storage
@@ -150,56 +150,123 @@ class TableProcessor:
     
     def _generate_description(self, table_data: dict) -> str:
         """
-        Generate text description of table.
-        
-        Uses markdown content to create description.
+        Generate rich, searchable text description of table with full content extraction.
+
+        Extracts headers, row labels, and statistical keywords to make tables fully searchable.
         """
         markdown = table_data.get("markdown", table_data.get("text", ""))
-        
+
         if not markdown or markdown == "| Table data unavailable |":
             return "Table with 0 rows"
-        
-        # Count rows from markdown
+
+        # Parse table structure
         lines = [l.strip() for l in markdown.split('\n') if l.strip() and l.strip().startswith('|')]
-        row_count = len([l for l in lines if not all(c in '|-: ' for c in l)])
-        
-        description = f"Table with {row_count} rows"
-        
-        # Try to extract first line as headers
-        if lines:
-            first_line = lines[0]
-            headers = [h.strip() for h in first_line.split('|') if h.strip()][:3]
-            if headers:
-                description += f". Headers: {', '.join(headers)}"
-        
+
+        # Remove separator lines (like |---|---|)
+        data_lines = [l for l in lines if not all(c in '|-: ' for c in l)]
+
+        if not data_lines:
+            return "Empty table"
+
+        # Extract headers (first line)
+        headers = []
+        if data_lines:
+            first_line = data_lines[0]
+            headers = [h.strip() for h in first_line.split('|') if h.strip()]
+
+        # Extract row labels (first column of each data row, excluding header)
+        row_labels = []
+        if len(data_lines) > 1:
+            for line in data_lines[1:]:
+                cells = [c.strip() for c in line.split('|') if c.strip()]
+                if cells:
+                    row_labels.append(cells[0])
+
+        # Extract all cell values for keyword extraction
+        all_values = []
+        for line in data_lines:
+            cells = [c.strip() for c in line.split('|') if c.strip()]
+            all_values.extend(cells)
+
+        # Identify statistical keywords
+        statistical_terms = []
+        stat_keywords = ['p-value', 'p.value', 'pvalue', 'coefficient', 'coef', 'std', 'stderr',
+                        'conf', 'interval', 't-stat', 'z-score', 'chi-square', 'df', 'mean',
+                        'median', 'correlation', 'r-squared', 'beta', 'odds', 'ratio',
+                        'significance', 'alpha', 'estimate']
+
+        for term in stat_keywords:
+            # Check if any header or value contains the statistical term
+            if any(term.lower() in str(v).lower() for v in all_values):
+                if term not in statistical_terms:
+                    statistical_terms.append(term)
+
+        # Build comprehensive description
+        description_parts = []
+
+        # Basic info
+        row_count = len(data_lines) - 1  # Exclude header
+        description_parts.append(f"Statistical table with {row_count} data rows")
+
+        # Add headers
+        if headers:
+            description_parts.append(f"Columns: {', '.join(headers[:5])}")  # First 5 headers
+
+        # Add row labels (variables/features)
+        if row_labels:
+            description_parts.append(f"Variables: {', '.join(row_labels[:10])}")  # First 10 row labels
+
+        # Add statistical context
+        if statistical_terms:
+            description_parts.append(f"Contains: {', '.join(statistical_terms)}")
+
+        # CRITICAL: Add plain text data extraction for each row
+        # This makes queries like "log(population) p value" actually work!
+        plain_text_rows = self._extract_plain_text_rows(markdown, headers, row_labels)
+        if plain_text_rows:
+            description_parts.append(f"Data: {plain_text_rows}")
+
+        # Combine into searchable description
+        description = ". ".join(description_parts)
+
         return description
-    
-    def generate_llm_description(
+
+    def _extract_plain_text_rows(
         self,
         markdown: str,
-        llm_service: Any
+        headers: List[str],
+        row_labels: List[str]
     ) -> str:
-        """
-        Generate LLM-based description of table.
-        
-        Args:
-            markdown: Table markdown
-            llm_service: LLM service with generate capabilities
-            
-        Returns:
-            Generated description
-        """
-        prompt = f"""Describe this table in 1-2 sentences. Focus on what data it contains and key insights.
+        """Extract first few rows as natural language for better searchability."""
+        if not markdown or not headers:
+            return ""
 
-Table:
-{markdown[:500]}"""  # Limit to first 500 chars
-        
-        try:
-            description = llm_service.generate(
-                prompt=prompt,
-                max_tokens=100
-            )
-            return description.strip()
-        except Exception as e:
-            logger.warning(f"Failed to generate LLM description: {e}")
-            return self._generate_description({"markdown": markdown})
+        lines = [l.strip() for l in markdown.split('\n') if l.strip() and l.strip().startswith('|')]
+        data_lines = [l for l in lines if not all(c in '|-: ' for c in l)]
+
+        if len(data_lines) < 2:
+            return ""
+
+        # Extract first 3 data rows as plain text
+        plain_text_parts = []
+        for row_line in data_lines[1:4]:  # Skip header, get first 3 data rows
+            cells = [c.strip() for c in row_line.split('|') if c.strip()]
+
+            if not cells or len(cells) != len(headers):
+                continue
+
+            row_label = cells[0]
+
+            # For each important column (p.value, coefficient, etc.), create searchable text
+            value_pairs = []
+            for i, (header, value) in enumerate(zip(headers, cells)):
+                if i == 0:
+                    continue
+                # Focus on statistical columns
+                if any(keyword in header.lower() for keyword in ['p.value', 'p-value', 'pvalue', 'coefficient', 'coef', 'estimate']):
+                    if value and value not in ['-', 'NA', 'N/A', '']:
+                        value_pairs.append(f"{row_label} {header} {value}")
+
+            plain_text_parts.extend(value_pairs)
+
+        return "; ".join(plain_text_parts[:5])  # First 5 key values

@@ -1,6 +1,6 @@
 """Image processing and description generation."""
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from loguru import logger
 from app.utils.file_storage import storage
 
@@ -118,40 +118,47 @@ class ImageProcessor:
             description += " (visual element)"
         
         return description
-    
-    def generate_vision_description(
+
+    def _generate_enhanced_description(
         self,
-        image_path: str,
-        llm_service: Any
+        caption: str,
+        image_data: Dict[str, Any]
     ) -> str:
         """
-        Generate vision LLM-based description of image.
-        
-        Args:
-            image_path: Path to image file
-            llm_service: LLM service with vision capabilities
-            
-        Returns:
-            Generated description
+        Generate enhanced text description when vision LLM fails.
+
+        Creates richer descriptions by analyzing metadata and context.
         """
-        prompt = "Describe this image in 1-2 sentences. Focus on the main content and any text visible."
-        
-        try:
-            # This would call a vision model like GPT-4V or Claude with vision
-            description = llm_service.generate_with_image(
-                prompt=prompt,
-                image_path=image_path,
-                max_tokens=150
-            )
-            return description.strip()
-        except Exception as e:
-            logger.warning(f"Failed to generate vision description: {e}")
-            return "Image content"
-    
+        element_type = self._classify_image_type(image_data)
+
+        # Start with element type
+        if element_type == "chart":
+            description = "Chart or graph visualization"
+        elif element_type == "figure":
+            description = "Figure or diagram"
+        else:
+            description = "Image"
+
+        # Add caption if available
+        if caption:
+            description += f": {caption}"
+
+        # Add metadata insights
+        metadata = image_data.get("metadata", {})
+        if metadata.get("original_size"):
+            width, height = metadata["original_size"]
+            description += f" ({width}x{height} pixels)"
+
+        # Add page context
+        page = image_data.get("page", 1)
+        description += f" from page {page}"
+
+        return description
+
     def extract_image_text_ocr(self, image_data: bytes) -> str:
         """
         Extract text from image using OCR.
-        
+
         This is a placeholder for OCR functionality.
         In production, integrate with Tesseract or cloud OCR services.
         """
