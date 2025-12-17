@@ -192,90 +192,124 @@ curl -X POST "http://localhost:8000/api/v1/advanced/query" \
 
 ## Architecture
 
-### High-Level Design
+### Basic RAG System
 
 ```mermaid
-flowchart TB
-    subgraph Client["Frontend (React)"]
-        UI[User Interface]
+flowchart LR
+    subgraph UI["User React UI"]
+        Upload["Upload PDF / Ask Question"]
     end
 
-    subgraph API["FastAPI Backend"]
-        BR["/api/v1/basic/*"]
-        AR["/api/v1/advanced/*"]
+    subgraph Ingestion["Document Ingestion"]
+        API["FastAPI Backend"]
+        Parser["PDF Parser<br/>Text Extraction"]
+        Chunker["Fixed-size<br/>Text Chunking"]
+        Embed["Embedding Model<br/>(all-MiniLM)"]
     end
 
-    subgraph Processing["Document Processing"]
-        direction TB
-        BP["Basic Processor<br/>(PyMuPDF)"]
-        AP["Advanced Processor<br/>(Docling)"]
-        TP["Table Processor"]
-        IP["Image Processor"]
+    subgraph Storage["Storage Layer"]
+        Qdrant[("Qdrant Vector DB")]
+        Supabase[("Supabase DB<br/>(Metadata)")]
     end
 
-    subgraph Chunking["Text Chunking"]
-        FC["Fixed-Size Chunker"]
-        SC["Semantic Chunker"]
+    subgraph QA["Question Answering"]
+        Encode["Encode Query"]
+        Search["Linked Chunks<br/>with same mode"]
+        Similarity["Vector Similarity Search"]
+        TopK["Top-k Relevant Chunks"]
+        Context["Retrieve Context"]
+        LLM["Groq LLM / Summarizer<br/>Model"]
+        Answer["Generated Answer"]
     end
 
-    subgraph Embedding["Embedding Service"]
-        ES["Sentence Transformers<br/>(all-MiniLM-L6-v2)"]
-    end
+    Upload -->|PDF File| API
+    API --> Parser
+    Parser --> Chunker
+    Chunker --> Embed
+    Embed -->|Chunk Embeddings<br/>→ Vectors| Qdrant
+    Embed -->|Text + Metadata| Supabase
 
-    subgraph VectorDB["Qdrant Vector Store"]
-        BC[("basic_rag_collection")]
-        TC[("advanced_text_collection")]
-        VC[("advanced_visual_collection")]
-    end
-
-    subgraph Storage["Supabase"]
-        DB[(PostgreSQL)]
-        SB[(Storage Bucket)]
-    end
-
-    subgraph LLM["LLM Services"]
-        GQ["Groq API<br/>(Llama 3.3 70B)"]
-        GM["Google Gemini<br/>(Vision Tasks)"]
-    end
-
-    UI --> BR & AR
-    
-    BR --> BP --> FC --> ES --> BC
-    AR --> AP --> SC --> ES --> TC & VC
-    AP --> TP & IP
-    TP & IP --> VC
-    
-    BC & TC & VC --> ES
-    ES --> GQ
-    AP -.-> GM
-    
-    BP & AP --> DB
-    IP --> SB
-    TP --> SB
-    
-    GQ --> UI
+    Upload -->|User Question| Encode
+    Encode --> Similarity
+    Similarity --> Qdrant
+    Qdrant --> Search
+    Search --> TopK
+    TopK --> Context
+    Context --> LLM
+    LLM --> Answer
+    Answer --> UI
 ```
 
-### Query Flow
+### Advanced RAG System
 
 ```mermaid
-sequenceDiagram
-    participant U as User
-    participant F as Frontend
-    participant A as FastAPI
-    participant E as Embeddings
-    participant Q as Qdrant
-    participant L as Groq LLM
+flowchart LR
+    subgraph UI["User React UI"]
+        Upload["Upload PDF"]
+        Query["Ask Question"]
+    end
 
-    U->>F: Submit Question
-    F->>A: POST /query
-    A->>E: Embed Query
-    E->>Q: Similarity Search
-    Q-->>A: Top-K Chunks
-    A->>L: Generate Answer<br/>(Question + Context)
-    L-->>A: Answer + Citations
-    A-->>F: Response JSON
-    F-->>U: Display Answer
+    subgraph DocProcess["Document Processing"]
+        Docling["Docling +<br/>GeminiFlash OCR"]
+        
+        subgraph Extraction["Content Extraction"]
+            Text["Text Content"]
+            Tables["Table Processor"]
+            Images["Image Processor"]
+        end
+    end
+
+    subgraph Chunking["Text Processing"]
+        Semantic["Semantic Chunker"]
+        TableEmbed["Table/Image<br/>Embeddings"]
+    end
+
+    subgraph Embedding["Embedding Layer"]
+        EmbedModel["Embedding Model<br/>(all-MiniLM)"]
+    end
+
+    subgraph VectorStore["Qdrant Vector Store"]
+        TextColl[("advanced_text<br/>_collection")]
+        VisualColl[("advanced_visual<br/>_collection")]
+    end
+
+    subgraph StorageLayer["Supabase Storage"]
+        DB[("PostgreSQL<br/>Metadata")]
+        Bucket[("Storage Bucket<br/>Images/Tables")]
+    end
+
+    subgraph Retrieval["Hybrid Retrieval"]
+        QueryEmbed["Query Embedding"]
+        TextSearch["Text Search"]
+        VisualSearch["Visual Search"]
+        Rerank["Re-ranking +<br/>Score Boosting"]
+    end
+
+    subgraph Generation["Answer Generation"]
+        Context["Context Builder"]
+        LLM["Groq LLM<br/>(Llama 3.3 70B)"]
+        Response["Generated Answer<br/>+ Visual References"]
+    end
+
+    Upload --> Docling
+    Docling --> Text & Tables & Images
+    
+    Text --> Semantic --> EmbedModel --> TextColl
+    Tables --> TableEmbed --> EmbedModel --> VisualColl
+    Images --> TableEmbed
+    
+    Tables & Images --> Bucket
+    Docling --> DB
+
+    Query --> QueryEmbed
+    QueryEmbed --> TextSearch & VisualSearch
+    TextSearch --> TextColl
+    VisualSearch --> VisualColl
+    TextColl & VisualColl --> Rerank
+    Rerank --> Context
+    Context --> LLM
+    LLM --> Response
+    Response --> UI
 ```
 
 ### Project Structure
