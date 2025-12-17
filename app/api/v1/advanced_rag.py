@@ -346,6 +346,28 @@ def _is_statistical_query(query: str) -> bool:
     return False
 
 
+def _wants_figure_or_image(query: str) -> bool:
+    """
+    Detect if query specifically wants figures/images (not tables).
+    
+    Args:
+        query: User query string
+        
+    Returns:
+        True if query is asking for figures, images, charts, or visualizations
+    """
+    query_lower = query.lower()
+    
+    # Keywords that indicate user wants images/figures, NOT tables
+    figure_keywords = [
+        'figure', 'image', 'picture', 'diagram', 'illustration',
+        'chart', 'graph', 'plot', 'visualization', 'visual',
+        'schematic', 'flowchart', 'overview diagram', 'architecture'
+    ]
+    
+    return any(kw in query_lower for kw in figure_keywords)
+
+
 @router.post("/upload", response_model=AdvancedUploadResponse)
 async def upload_pdf_advanced(
     file: UploadFile = File(...),
@@ -673,10 +695,17 @@ async def query_advanced(
             top_k=text_k
         )
 
+        # Determine element types to search based on query
+        visual_element_types = None
+        if _wants_figure_or_image(request.query):
+            visual_element_types = ["image", "figure", "chart"]
+            logger.info("Filtering visual search to images/figures/charts only (excluding tables)")
+
         # Search visual collection
         visual_results = qdrant_service.search_visual(
             query_embedding=query_embedding,
-            top_k=visual_k
+            top_k=visual_k,
+            element_types=visual_element_types
         )
 
         # Re-rank results: boost table-enriched chunks (more aggressive for statistical queries)
@@ -700,34 +729,46 @@ async def query_advanced(
         # Re-sort text results after boosting
         text_results = sorted(text_results, key=lambda x: x["score"], reverse=True)[:top_k]
 
-        # UNIVERSAL HYBRID SEARCH: Apply intelligent term-based table search for ALL queries
-        # This works for ANY query type - statistical, business, medical, technical, etc.
-        logger.info("Applying universal hybrid table search")
+        # UNIVERSAL HYBRID SEARCH: Apply intelligent term-based table search
+        # CRITICAL: Only search tables if user is NOT specifically asking for figures/images
+        # If visual_element_types is filtered to images/figures/charts, skip table injection
+        if visual_element_types is None:
+            # User did NOT specifically request figures/images, so tables are allowed
+            logger.info("Applying universal hybrid table search")
 
-        # Extract all meaningful terms from the query (works for ANY domain)
-        query_terms = _extract_query_terms(request.query)
-        logger.info(f"Extracted {len(query_terms)} terms from query: {query_terms[:10]}")
+            # Extract all meaningful terms from the query (works for ANY domain)
+            query_terms = _extract_query_terms(request.query)
+            logger.info(f"Extracted {len(query_terms)} terms from query: {query_terms[:10]}")
 
-        # Get document IDs from top vector search results
-        top_doc_ids = list(set([r["document_id"] for r in text_results[:5]]))  # Top 5 docs
+            # Get document IDs from top vector search results
+            top_doc_ids = list(set([r["document_id"] for r in text_results[:5]]))  # Top 5 docs
 
-        if top_doc_ids and query_terms:
-            # Search ALL tables in these documents for the query terms
-            term_matched_tables = _search_tables_by_terms(
-                supabase=supabase,
-                document_ids=top_doc_ids,
-                query_terms=query_terms
-            )
+            if top_doc_ids and query_terms:
+                # Search ALL tables in these documents for the query terms
+                term_matched_tables = _search_tables_by_terms(
+                    supabase=supabase,
+                    document_ids=top_doc_ids,
+                    query_terms=query_terms
+                )
 
-            if term_matched_tables:
-                logger.success(f"Found {len(term_matched_tables)} tables via hybrid term search!")
-                # Inject matched tables into visual results (they already have high scores)
-                for table in term_matched_tables:
-                    # Add to front if not already in results
-                    existing_ids = {v.get("element_id") for v in visual_results}
-                    if table["element_id"] not in existing_ids:
-                        visual_results.insert(0, table)
-        
+                if term_matched_tables:
+                    logger.success(f"Found {len(term_matched_tables)} tables via hybrid term search!")
+                    # Inject matched tables into visual results (they already have high scores)
+                    for table in term_matched_tables:
+                        # Add to front if not already in results
+                        existing_ids = {v.get("element_id") for v in visual_results}
+                        if table["element_id"] not in existing_ids:
+                            visual_results.insert(0, table)
+        else:
+            logger.info(f"Skipping table hybrid search - user specifically requested: {visual_element_types}")
+
+        # CRITICAL FIX: Sort all visual results by relevance score (highest first)
+        # This ensures the most relevant visuals/tables/figures appear at the top
+        # Must be done AFTER hybrid search injection to ensure correct ordering
+        if visual_results:
+            visual_results.sort(key=lambda x: x["score"], reverse=True)
+            logger.info(f"Sorted {len(visual_results)} visual results by relevance score (top score: {visual_results[0]['score']:.3f})")
+
         if not text_results and not visual_results:
             return AdvancedQueryResponse(
                 answer="I couldn't find any relevant information to answer your question.",
@@ -801,8 +842,21 @@ async def query_advanced(
             ))
         
         # Prepare visual references
+        # Filter by minimum relevance score - only return truly relevant visuals
+        MIN_VISUAL_RELEVANCE_SCORE = 0.3  # Configurable threshold
+        filtered_visual_results = [
+            r for r in visual_results 
+            if r["score"] >= MIN_VISUAL_RELEVANCE_SCORE
+        ]
+        
+        # Limit to top 5 relevant results (or 0 if none are relevant)
+        MAX_VISUAL_RESULTS = 5
+        filtered_visual_results = filtered_visual_results[:MAX_VISUAL_RESULTS]
+        
+        logger.info(f"Filtered from {len(visual_results)} to {len(filtered_visual_results)} visual elements (min score: {MIN_VISUAL_RELEVANCE_SCORE})")
+        
         visual_refs = []
-        for result in visual_results:
+        for result in filtered_visual_results:
             ve_detail = visual_details.get(result["element_id"], {})
             
             # Generate signed URL for image/table/figure visualization

@@ -6,7 +6,7 @@ Run this script once to set up all required collections.
 import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, VectorParams, PayloadSchemaType
 from loguru import logger
 
 load_dotenv()
@@ -70,6 +70,18 @@ def init_qdrant_collections():
             logger.error(f"✗ Failed to create collection '{collection_name}': {e}")
             raise
     
+    # Create payload indexes for filtering
+    try:
+        logger.info("Creating payload indexes for advanced_visual_collection...")
+        client.create_payload_index(
+            collection_name="advanced_visual_collection",
+            field_name="element_type",
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        logger.success("✓ Created index on element_type field")
+    except Exception as e:
+        logger.warning(f"Index creation skipped (may already exist): {e}")
+    
     logger.success("\n🎉 All Qdrant collections initialized successfully!")
     
     # Display summary
@@ -81,3 +93,4 @@ def init_qdrant_collections():
 if __name__ == "__main__":
     logger.info("Initializing Qdrant collections for RAG pipeline...")
     init_qdrant_collections()
+

@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue, MatchAny
 import uuid
 from loguru import logger
 from app.core.config import settings
@@ -198,7 +198,7 @@ class QdrantAdvancedService:
             filters.append(
                 FieldCondition(
                     key="element_type",
-                    match=MatchValue(any=element_types)
+                    match=MatchAny(any=element_types)
                 )
             )
         
