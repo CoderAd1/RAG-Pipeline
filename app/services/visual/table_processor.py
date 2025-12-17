@@ -34,10 +34,8 @@ class TableProcessor:
         Returns:
             Processed table metadata
         """
-        # Extract table image if PDF path and bbox are provided
         file_path = None
-        
-        # DEBUG: Write to file to verify execution
+                
         with open("/tmp/table_debug.txt", "a") as f:
             f.write(f"process_table called: pdf_path={pdf_path is not None}, bbox={table_data.get('bbox') is not None}\n")
         
@@ -62,11 +60,9 @@ class TableProcessor:
                 logger.warning("No PDF path provided for table image extraction")
             if not table_data.get('bbox'):
                 logger.warning(f"No bbox in table_data. Keys: {list(table_data.keys())}")
-        
-        # Get markdown representation
+                
         markdown = table_data.get("markdown", table_data.get("text", ""))
-        
-        # Save table data as JSON
+                
         table_json_path = self.storage.save_table_json(
             document_id=document_id,
             element_id=element_id,
@@ -77,14 +73,13 @@ class TableProcessor:
             }
         )
         
-        # Generate description
         description = self._generate_description(table_data)
         
         return {
             "element_type": "table",
             "page_number": page_number,
-            "file_path": file_path,  # Image path
-            "table_json_path": table_json_path,  # JSON path
+            "file_path": file_path,
+            "table_json_path": table_json_path,
             "table_markdown": markdown,
             "text_annotation": description,
             "metadata": table_data.get("metadata", {})
@@ -111,34 +106,28 @@ class TableProcessor:
         Returns:
             Storage path to saved image
         """
-        import fitz  # PyMuPDF
+        import fitz 
         
-        # Open PDF
         pdf_doc = fitz.open(pdf_path)
-        page = pdf_doc[page_number - 1]  # 0-indexed
+        page = pdf_doc[page_number - 1]  
         page_height = page.rect.height
         
-        # Convert coordinates based on origin
-        # Docling uses BOTTOMLEFT, PyMuPDF uses TOPLEFT
         coord_origin = str(bbox.get('coord_origin', 'BOTTOMLEFT'))
         if 'BOTTOMLEFT' in coord_origin:
-            y0 = page_height - bbox['t']  # top in TOPLEFT
-            y1 = page_height - bbox['b']  # bottom in TOPLEFT
+            y0 = page_height - bbox['t'] 
+            y1 = page_height - bbox['b'] 
         else:
             y0 = bbox['t']
             y1 = bbox['b']
         
         rect = fitz.Rect(bbox['l'], y0, bbox['r'], y1)
         
-        # Extract as image with 2x scaling for better quality
         pix = page.get_pixmap(clip=rect, matrix=fitz.Matrix(2, 2))
         
-        # Convert to PNG bytes
         img_bytes = pix.tobytes("png")
         
         pdf_doc.close()
         
-        # Save to storage
         file_path = self.storage.save_image(
             document_id=document_id,
             element_id=element_id,
@@ -159,22 +148,18 @@ class TableProcessor:
         if not markdown or markdown == "| Table data unavailable |":
             return "Table with 0 rows"
 
-        # Parse table structure
         lines = [l.strip() for l in markdown.split('\n') if l.strip() and l.strip().startswith('|')]
 
-        # Remove separator lines (like |---|---|)
         data_lines = [l for l in lines if not all(c in '|-: ' for c in l)]
 
         if not data_lines:
             return "Empty table"
 
-        # Extract headers (first line)
         headers = []
         if data_lines:
             first_line = data_lines[0]
             headers = [h.strip() for h in first_line.split('|') if h.strip()]
 
-        # Extract row labels (first column of each data row, excluding header)
         row_labels = []
         if len(data_lines) > 1:
             for line in data_lines[1:]:
@@ -182,13 +167,11 @@ class TableProcessor:
                 if cells:
                     row_labels.append(cells[0])
 
-        # Extract all cell values for keyword extraction
         all_values = []
         for line in data_lines:
             cells = [c.strip() for c in line.split('|') if c.strip()]
             all_values.extend(cells)
 
-        # Identify statistical keywords
         statistical_terms = []
         stat_keywords = ['p-value', 'p.value', 'pvalue', 'coefficient', 'coef', 'std', 'stderr',
                         'conf', 'interval', 't-stat', 'z-score', 'chi-square', 'df', 'mean',
@@ -196,37 +179,28 @@ class TableProcessor:
                         'significance', 'alpha', 'estimate']
 
         for term in stat_keywords:
-            # Check if any header or value contains the statistical term
             if any(term.lower() in str(v).lower() for v in all_values):
                 if term not in statistical_terms:
                     statistical_terms.append(term)
 
-        # Build comprehensive description
         description_parts = []
 
-        # Basic info
-        row_count = len(data_lines) - 1  # Exclude header
+        row_count = len(data_lines) - 1  
         description_parts.append(f"Statistical table with {row_count} data rows")
 
-        # Add headers
         if headers:
-            description_parts.append(f"Columns: {', '.join(headers[:5])}")  # First 5 headers
+            description_parts.append(f"Columns: {', '.join(headers[:5])}")
 
-        # Add row labels (variables/features)
         if row_labels:
-            description_parts.append(f"Variables: {', '.join(row_labels[:10])}")  # First 10 row labels
+            description_parts.append(f"Variables: {', '.join(row_labels[:10])}")
 
-        # Add statistical context
         if statistical_terms:
             description_parts.append(f"Contains: {', '.join(statistical_terms)}")
 
-        # CRITICAL: Add plain text data extraction for each row
-        # This makes queries like "log(population) p value" actually work!
         plain_text_rows = self._extract_plain_text_rows(markdown, headers, row_labels)
         if plain_text_rows:
             description_parts.append(f"Data: {plain_text_rows}")
 
-        # Combine into searchable description
         description = ". ".join(description_parts)
 
         return description
@@ -247,9 +221,8 @@ class TableProcessor:
         if len(data_lines) < 2:
             return ""
 
-        # Extract first 3 data rows as plain text
         plain_text_parts = []
-        for row_line in data_lines[1:4]:  # Skip header, get first 3 data rows
+        for row_line in data_lines[1:4]:
             cells = [c.strip() for c in row_line.split('|') if c.strip()]
 
             if not cells or len(cells) != len(headers):
@@ -257,16 +230,14 @@ class TableProcessor:
 
             row_label = cells[0]
 
-            # For each important column (p.value, coefficient, etc.), create searchable text
             value_pairs = []
             for i, (header, value) in enumerate(zip(headers, cells)):
                 if i == 0:
                     continue
-                # Focus on statistical columns
                 if any(keyword in header.lower() for keyword in ['p.value', 'p-value', 'pvalue', 'coefficient', 'coef', 'estimate']):
                     if value and value not in ['-', 'NA', 'N/A', '']:
                         value_pairs.append(f"{row_label} {header} {value}")
 
             plain_text_parts.extend(value_pairs)
 
-        return "; ".join(plain_text_parts[:5])  # First 5 key values
+        return "; ".join(plain_text_parts[:5]) 

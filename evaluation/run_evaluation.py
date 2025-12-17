@@ -126,7 +126,7 @@ class RAGEvaluator:
                 data = response.json()
                 return {
                     "answer": data.get("answer", ""),
-                    "confidence": None,  # Basic RAG doesn't return confidence
+                    "confidence": None,
                     "latency_ms": latency,
                     "context": "\n".join([c.get("text", "") for c in data.get("sources", [])]),
                     "error": None

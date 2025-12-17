@@ -37,8 +37,8 @@ class AdvancedPDFProcessor:
             
             # Configure pipeline to extract images
             pipeline_options = PdfPipelineOptions()
-            pipeline_options.generate_picture_images = True  # Enable image extraction
-            pipeline_options.images_scale = 2.0  # Higher quality images
+            pipeline_options.generate_picture_images = True
+            pipeline_options.images_scale = 2.0
             
             self.converter = DocumentConverter(
                 format_options={
@@ -66,16 +66,13 @@ class AdvancedPDFProcessor:
         logger.info(f"Processing PDF with Docling: {pdf_path.name}")
         
         try:
-            # Convert document
             result = self.converter.convert(str(pdf_path))
             doc = result.document
             
-            # Initialize containers
             sections = []
             tables = []
             images = []
             
-            # Get total pages
             total_pages_attr = getattr(doc, 'num_pages', None)
             if total_pages_attr is not None and callable(total_pages_attr):
                 total_pages = total_pages_attr()
@@ -84,18 +81,14 @@ class AdvancedPDFProcessor:
             else:
                 total_pages = 1
             
-            # Iterate through document body to extract elements
             try:
                 from docling_core.types.doc import DocItemLabel, TableItem, PictureItem, TextItem
                 
                 for element, _level in doc.iterate_items():
-                    # Extract tables
                     if isinstance(element, TableItem):
                         try:
-                            # Get table markdown
                             table_markdown = element.export_to_markdown(doc) if hasattr(element, 'export_to_markdown') else ""
                             
-                            # Get bounding box for image extraction
                             bbox = None
                             if hasattr(element, 'prov') and element.prov:
                                 prov = element.prov[0]
@@ -123,10 +116,8 @@ class AdvancedPDFProcessor:
                         except Exception as e:
                             logger.warning(f"Failed to extract table: {e}")
                     
-                    # Extract text sections
                     elif isinstance(element, TextItem):
                         try:
-                            # Use export_to_text() to get clean text without XML references
                             text_content = element.export_to_text(doc) if hasattr(element, 'export_to_text') else str(element.text if hasattr(element, 'text') else element)
                             if text_content and text_content.strip():
                                 section_data = {
@@ -141,11 +132,9 @@ class AdvancedPDFProcessor:
                         except Exception as e:
                             logger.warning(f"Failed to extract text section: {e}")
                 
-                # Extract images from doc.pictures (separate from iteration)
                 logger.debug(f"Found {len(doc.pictures)} pictures in document")
                 for pic_item in doc.pictures:
                     try:
-                        # Get the actual PIL image
                         image_pil = pic_item.get_image(doc)
                         
                         if image_pil:
@@ -169,7 +158,6 @@ class AdvancedPDFProcessor:
                 
             except ImportError:
                 logger.warning("Could not import Docling types, falling back to markdown export")
-                # Fallback to markdown export
                 markdown_text = doc.export_to_markdown()
                 parts = markdown_text.split('\n\n')
                 page_num = 1
@@ -185,7 +173,6 @@ class AdvancedPDFProcessor:
                         if (i + 1) % 10 == 0:
                             page_num += 1
             
-            # If no sections were extracted, use markdown fallback
             if not sections:
                 logger.warning("No sections extracted, using markdown fallback")
                 markdown_text = doc.export_to_markdown()
@@ -228,14 +215,12 @@ class AdvancedPDFProcessor:
             
         except Exception as e:
             logger.error(f"Failed to process PDF with Docling: {e}")
-            # Fallback to basic extraction
             logger.info("Falling back to basic text extraction")
             return self._fallback_extraction(pdf_path)
     
     def _extract_table(self, table_element) -> Dict[str, Any]:
         """Extract table data from Docling table element."""
         try:
-            # Convert table to structured format
             table_data = {
                 "page": getattr(table_element, "page", 1),
                 "bbox": getattr(table_element, "bbox", None),
@@ -243,7 +228,6 @@ class AdvancedPDFProcessor:
                 "markdown": str(table_element) if hasattr(table_element, "__str__") else ""
             }
             
-            # Extract cell data if available
             if hasattr(table_element, "data"):
                 table_data["cells"] = table_element.data
             
@@ -284,7 +268,7 @@ class AdvancedPDFProcessor:
         
         doc = fitz.open(pdf_path)
         sections = []
-        total_pages = len(doc)  # Get page count before closing
+        total_pages = len(doc)
         
         for page_num in range(total_pages):
             page = doc[page_num]

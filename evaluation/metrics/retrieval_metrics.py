@@ -152,13 +152,10 @@ def ndcg_at_k(
             dcg_sum += rel / math.log2(i + 2)  # i+2 because log2(1) = 0
         return dcg_sum
     
-    # Get binary relevance for retrieved items
     retrieved_relevances = [1 if doc_id in relevant_ids else 0 for doc_id in retrieved_ids]
     
-    # Calculate DCG
     actual_dcg = dcg(retrieved_relevances, k)
     
-    # Calculate ideal DCG (all relevant items first)
     ideal_relevances = [1] * min(len(relevant_ids), k) + [0] * (k - min(len(relevant_ids), k))
     ideal_dcg = dcg(ideal_relevances, k)
     

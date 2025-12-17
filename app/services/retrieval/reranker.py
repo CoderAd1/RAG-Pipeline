@@ -52,35 +52,27 @@ class CrossEncoderReranker:
 
         logger.info(f"Re-ranking {len(documents)} documents for query: '{query[:50]}...'")
 
-        # Prepare query-document pairs
         pairs = []
         for doc in documents:
             text = doc.get(text_field, "")
             if isinstance(text, str):
                 pairs.append([query, text])
             else:
-                # Handle case where text might be in nested structure
                 pairs.append([query, str(text)])
 
-        # Get cross-encoder scores
         scores = self.model.predict(pairs)
 
-        # Attach scores to documents
         reranked = []
         for doc, score in zip(documents, scores):
             doc_copy = doc.copy()
             doc_copy["rerank_score"] = float(score)
-            # Preserve original score if exists
             if "score" in doc:
                 doc_copy["original_score"] = doc["score"]
-            # Use rerank score as primary score
             doc_copy["score"] = float(score)
             reranked.append(doc_copy)
 
-        # Sort by rerank score descending
         reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
 
-        # Return top-k if specified
         if top_k is not None:
             reranked = reranked[:top_k]
 

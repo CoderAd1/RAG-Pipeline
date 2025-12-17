@@ -1,7 +1,7 @@
 {
     "metadata": {
         "name": "Research Papers Test Dataset - Jaccard Optimized",
-        "description": "Questions rewritten with output constraints (e.g., 'Answer in 5 words') to make Jaccard Similarity evaluation viable.",
+        "description": "Questions computed using Jaccard Optimized method",
         "version": "5.0-jaccard-optimized",
         "created": "2025-12-16",
         "total_questions": 10,

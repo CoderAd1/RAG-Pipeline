@@ -47,10 +47,8 @@ class BasicPDFProcessor:
             
             doc.close()
             
-            # Check if we got meaningful text
             meaningful_chars = len(total_text.strip())
             
-            # If very little text extracted, try OCR (scanned PDF)
             if meaningful_chars < 100:
                 logger.warning(
                     f"PyMuPDF extracted only {meaningful_chars} characters. "
@@ -96,25 +94,20 @@ class BasicPDFProcessor:
             
             logger.info(f"Using OCR for text extraction: {pdf_path.name}")
             
-            # Use Docling with default OCR settings
             converter = DocumentConverter()
             result = converter.convert(str(pdf_path))
             doc = result.document
             
-            # Export to markdown (text only)
             markdown_text = doc.export_to_markdown()
             
-            # Get page count
             total_pages_attr = getattr(doc, 'num_pages', None)
             if total_pages_attr is not None and callable(total_pages_attr):
                 total_pages = total_pages_attr()
             elif total_pages_attr is not None:
                 total_pages = int(total_pages_attr)
             else:
-                # Estimate from text length
                 total_pages = max(1, len(markdown_text) // 3000)
             
-            # Distribute text across pages
             pages_data = []
             chars_per_page = len(markdown_text) // total_pages if total_pages > 0 else len(markdown_text)
             

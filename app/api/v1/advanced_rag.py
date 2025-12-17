@@ -42,7 +42,7 @@ router = APIRouter(prefix="/advanced", tags=["Advanced RAG"])
 
 def _extract_query_terms(query: str) -> list:
     """
-    UNIVERSAL query term extraction - works for ANY query type, not just statistical.
+    UNIVERSAL query term extraction
 
     Extracts ALL meaningful terms from the query including:
     - Function calls: log(population), sqrt(x), etc.
@@ -57,33 +57,25 @@ def _extract_query_terms(query: str) -> list:
 
     terms = []
     query_lower = query.lower()
-
-    # 1. Extract quoted phrases (highest priority - user wants exact match)
+    
     quoted = re.findall(r'["\']([^"\']+)["\']', query)
     terms.extend(quoted)
 
-    # 2. Extract function patterns: log(...), ln(...), sqrt(...), etc.
-    # Matches ANY function name, not just predefined ones
     function_patterns = re.findall(r'\b([a-z_]+)\s*\(\s*([^)]+)\s*\)', query_lower)
     for func, arg in function_patterns:
         terms.append(f"{func}({arg.strip()})")
-        terms.append(f"{func} ({arg.strip()})")  # With space
-        terms.append(arg.strip())  # Also add the argument alone
+        terms.append(f"{func} ({arg.strip()})")
+        terms.append(arg.strip())
 
-    # 3. Extract compound terms with special characters (dots, hyphens, underscores)
-    # Examples: p.value, t-test, customer_id, GDP-2023
     compound_terms = re.findall(r'\b[a-z0-9]+[._-][a-z0-9._-]+\b', query_lower)
     for term in compound_terms:
         terms.append(term)
-        # Add variations
         terms.append(term.replace('.', ' '))
         terms.append(term.replace('-', ' '))
         terms.append(term.replace('_', ' '))
         terms.append(term.replace('.', '').replace('-', '').replace('_', ''))
 
-    # 4. Extract multi-word phrases (bigrams and trigrams)
     words = re.findall(r'\b[a-z][a-z0-9_]*\b', query_lower)
-    # Filter out stop words
     stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at',
                   'to', 'for', 'of', 'with', 'by', 'from', 'as', 'this', 'that',
                   'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do',
@@ -92,24 +84,18 @@ def _extract_query_terms(query: str) -> list:
 
     filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
 
-    # Add bigrams (2-word phrases)
     for i in range(len(filtered_words) - 1):
         bigram = f"{filtered_words[i]} {filtered_words[i+1]}"
         terms.append(bigram)
-
-    # Add trigrams (3-word phrases)
     for i in range(len(filtered_words) - 2):
         trigram = f"{filtered_words[i]} {filtered_words[i+1]} {filtered_words[i+2]}"
         terms.append(trigram)
 
-    # 5. Add individual significant words
     terms.extend(filtered_words)
 
-    # 6. Extract numbers and percentages
     numbers = re.findall(r'\b\d+\.?\d*%?\b', query)
     terms.extend(numbers)
 
-    # Remove duplicates while preserving order
     unique_terms = []
     seen = set()
     for term in terms:
@@ -127,7 +113,7 @@ def _search_tables_by_terms(
     query_terms: list
 ) -> list:
     """
-    UNIVERSAL table search - finds tables containing ANY of the query terms.
+    UNIVERSAL table search
 
     Uses fuzzy matching and intelligent scoring to find relevant tables
     for ANY query type (not just statistical).
@@ -141,7 +127,6 @@ def _search_tables_by_terms(
         List of matched tables with relevance scores
     """
     try:
-        # Fetch ALL tables from the specified documents
         tables_result = supabase.table("visual_elements").select(
             "id, element_type, page_number, file_path, text_annotation, table_markdown, metadata, document_id"
         ).eq("element_type", "table").in_("document_id", document_ids).execute()
@@ -157,7 +142,6 @@ def _search_tables_by_terms(
             if not table_markdown:
                 continue
 
-            # Scan the table for ANY query terms (case-insensitive, fuzzy)
             markdown_lower = table_markdown.lower()
             text_annotation_lower = table.get("text_annotation", "").lower()
 
@@ -170,32 +154,21 @@ def _search_tables_by_terms(
                 if not term_clean or len(term_clean) < 2:
                     continue
 
-                # Check for exact match in markdown
                 if term_clean in markdown_lower:
                     matches.append(term_clean)
-                    # Longer terms get higher scores (more specific)
                     match_scores.append(len(term_clean))
                     continue
 
-                # Check for partial match (fuzzy) - useful for variations
-                # Split term into parts and check if all parts exist
                 term_parts = term_clean.split()
                 if len(term_parts) > 1:
-                    # Multi-word term - check if all words appear
                     if all(part in markdown_lower or part in text_annotation_lower for part in term_parts):
                         matches.append(term_clean)
-                        match_scores.append(len(term_clean) * 0.8)  # Slightly lower score for fuzzy
+                        match_scores.append(len(term_clean) * 0.8)
 
-            # If we found matches, this table is relevant
             if matches:
-                # Calculate intelligent relevance score
-                # - More matches = higher score
-                # - Longer matched terms = higher score (more specific)
-                # - Base score: 0.9 (high but not higher than perfect vector matches)
                 total_match_score = sum(match_scores)
                 match_count = len(matches)
 
-                # Normalize score: 0.90 to 0.99
                 relevance_score = min(0.90 + (match_count * 0.02) + (total_match_score / 1000), 0.99)
 
                 matched_tables.append({
@@ -217,10 +190,9 @@ def _search_tables_by_terms(
 
                 logger.info(f"Table on page {table.get('page_number')} matches {match_count} terms: {matches[:5]}")
 
-        # Sort by score (more and better matches = higher score)
         matched_tables.sort(key=lambda x: x["score"], reverse=True)
 
-        return matched_tables[:8]  # Return top 8 term-matched tables
+        return matched_tables[:8]
 
     except Exception as e:
         logger.error(f"Universal table search failed: {e}")
@@ -293,7 +265,6 @@ def _is_visual_query(query: str) -> bool:
         if re.search(pattern, query_lower):
             return True
 
-    # Check for visual file extensions in queries
     if any(ext in query_lower for ext in ['.png', '.jpg', '.jpeg', '.svg', '.pdf']):
         return True
 
@@ -388,7 +359,6 @@ async def upload_pdf_advanced(
     - Stores in advanced collections
     """
     try:
-        # Validate file
         sanitized_filename = FileValidator.validate_and_sanitize(file)
         logger.info(f"Processing advanced upload: {sanitized_filename}")
         
@@ -671,25 +641,20 @@ async def query_advanced(
         is_visual_query = _is_visual_query(request.query)
         is_statistical_query = _is_statistical_query(request.query)
 
-        # Improved hybrid retrieval strategy based on query type
         top_k = request.top_k or 10
 
         if is_visual_query:
-            # For graph/image/chart queries: prioritize visual collection heavily
-            text_k = min(top_k, 5)  # Minimal text
-            visual_k = min(top_k * 2, 20)  # Lots of visuals
+            text_k = min(top_k, 5)
+            visual_k = min(top_k * 2, 20)
             logger.info(f"Visual query detected (graph/chart/image), retrieving {visual_k} visual candidates")
         elif is_statistical_query:
-            # For statistical queries: retrieve more candidates to ensure tables are found
             text_k = min(top_k * 3, 30)
             visual_k = max(int(top_k * 0.6), 8)
             logger.info(f"Statistical query detected, retrieving {text_k} text and {visual_k} visual candidates")
         else:
-            # Standard retrieval
             text_k = min(top_k * 2, 20)
             visual_k = max(int(top_k * 0.4), 5)
 
-        # Search text collection (includes table-enriched chunks now)
         text_results = qdrant_service.search_text(
             query_embedding=query_embedding,
             top_k=text_k
@@ -708,43 +673,31 @@ async def query_advanced(
             element_types=visual_element_types
         )
 
-        # Re-rank results: boost table-enriched chunks (more aggressive for statistical queries)
         boost_factor = 1.5 if is_statistical_query else 1.2
 
         for result in text_results:
-            # Check if this is a table chunk from database
             chunk_id = result.get("chunk_id")
             if chunk_id:
                 try:
                     chunk_data = supabase.table("chunks").select("chunk_type, metadata").eq("id", chunk_id).execute()
                     if chunk_data.data and len(chunk_data.data) > 0:
                         chunk_type = chunk_data.data[0].get("chunk_type", "")
-                        # Boost table chunks
                         if "table" in chunk_type:
                             result["score"] = result["score"] * boost_factor
                             logger.debug(f"Boosted table chunk score by {boost_factor}x to {result['score']}")
                 except Exception as e:
                     logger.warning(f"Failed to fetch chunk type: {e}")
 
-        # Re-sort text results after boosting
         text_results = sorted(text_results, key=lambda x: x["score"], reverse=True)[:top_k]
 
-        # UNIVERSAL HYBRID SEARCH: Apply intelligent term-based table search
-        # CRITICAL: Only search tables if user is NOT specifically asking for figures/images
-        # If visual_element_types is filtered to images/figures/charts, skip table injection
         if visual_element_types is None:
-            # User did NOT specifically request figures/images, so tables are allowed
             logger.info("Applying universal hybrid table search")
-
-            # Extract all meaningful terms from the query (works for ANY domain)
             query_terms = _extract_query_terms(request.query)
             logger.info(f"Extracted {len(query_terms)} terms from query: {query_terms[:10]}")
 
-            # Get document IDs from top vector search results
-            top_doc_ids = list(set([r["document_id"] for r in text_results[:5]]))  # Top 5 docs
+            top_doc_ids = list(set([r["document_id"] for r in text_results[:5]]))
 
             if top_doc_ids and query_terms:
-                # Search ALL tables in these documents for the query terms
                 term_matched_tables = _search_tables_by_terms(
                     supabase=supabase,
                     document_ids=top_doc_ids,
@@ -753,18 +706,13 @@ async def query_advanced(
 
                 if term_matched_tables:
                     logger.success(f"Found {len(term_matched_tables)} tables via hybrid term search!")
-                    # Inject matched tables into visual results (they already have high scores)
                     for table in term_matched_tables:
-                        # Add to front if not already in results
                         existing_ids = {v.get("element_id") for v in visual_results}
                         if table["element_id"] not in existing_ids:
                             visual_results.insert(0, table)
         else:
             logger.info(f"Skipping table hybrid search - user specifically requested: {visual_element_types}")
 
-        # CRITICAL FIX: Sort all visual results by relevance score (highest first)
-        # This ensures the most relevant visuals/tables/figures appear at the top
-        # Must be done AFTER hybrid search injection to ensure correct ordering
         if visual_results:
             visual_results.sort(key=lambda x: x["score"], reverse=True)
             logger.info(f"Sorted {len(visual_results)} visual results by relevance score (top score: {visual_results[0]['score']:.3f})")
@@ -778,7 +726,6 @@ async def query_advanced(
                 query_time_ms=int((time.time() - start_time) * 1000)
             )
         
-        # Get document names
         all_doc_ids = list(set(
             [r["document_id"] for r in text_results] +
             [r["document_id"] for r in visual_results]
@@ -786,19 +733,16 @@ async def query_advanced(
         docs_result = supabase.table("documents").select("id, filename").in_("id", all_doc_ids).execute()
         doc_map = {doc["id"]: doc["filename"] for doc in docs_result.data}
         
-        # Get visual element details
         visual_element_ids = [r["element_id"] for r in visual_results]
         visual_details = {}
         if visual_element_ids:
             ve_result = supabase.table("visual_elements").select("*").in_("id", visual_element_ids).execute()
             visual_details = {ve["id"]: ve for ve in ve_result.data}
         
-        # Prepare enhanced context for LLM with table awareness
         context_chunks = []
         for idx, result in enumerate(text_results, 1):
             chunk_text = result["text"]
 
-            # Add source attribution for better LLM reasoning
             source_prefix = f"[Source {idx}, Page {result['page']}, {doc_map.get(result['document_id'], 'Unknown')}]\n"
 
             context_chunks.append({
@@ -808,7 +752,6 @@ async def query_advanced(
                 "score": result.get("score", 0)
             })
         
-        # Prepare visual elements for LLM
         visual_elements_for_llm = []
         for result in visual_results:
             ve_detail = visual_details.get(result["element_id"], {})
@@ -820,7 +763,6 @@ async def query_advanced(
                 "document_name": doc_map.get(result["document_id"], "Unknown")
             })
         
-        # Generate answer
         logger.info("Generating multimodal answer...")
         answer = llm_service.generate_answer(
             question=request.query,
@@ -828,7 +770,6 @@ async def query_advanced(
             visual_elements=visual_elements_for_llm
         )
 
-        # Prepare source references
         sources = []
         for result in text_results:
             sources.append(SourceReference(
@@ -841,7 +782,6 @@ async def query_advanced(
                 chunk_type=result.get("chunk_type")
             ))
         
-        # Prepare visual references
         # Filter by minimum relevance score - only return truly relevant visuals
         MIN_VISUAL_RELEVANCE_SCORE = 0.3  # Configurable threshold
         filtered_visual_results = [
@@ -859,14 +799,11 @@ async def query_advanced(
         for result in filtered_visual_results:
             ve_detail = visual_details.get(result["element_id"], {})
             
-            # Generate signed URL for image/table/figure visualization
             image_url = None
             file_path = ve_detail.get("file_path")
             if file_path:
-                # For images, figures, charts - use the file_path directly if it's an image file
                 if result["element_type"] in ["image", "figure", "chart"]:
                     image_url = storage.get_signed_url(file_path, expires_in=3600)
-                # For tables, check metadata for image_path first, then file_path
                 elif result["element_type"] == "table":
                     metadata = ve_detail.get("metadata", {})
                     if metadata.get("image_path"):
@@ -888,7 +825,6 @@ async def query_advanced(
         
         query_time_ms = int((time.time() - start_time) * 1000)
         
-        # Log query
         try:
             supabase.table("query_logs").insert({
                 "query_text": request.query,
@@ -926,7 +862,6 @@ async def list_advanced_documents(
     try:
         logger.info("Fetching advanced collection documents")
         
-        # Get all advanced documents
         docs_result = supabase.table("documents").select(
             "id, filename, created_at, total_pages, processing_status, ingestion_type"
         ).eq("ingestion_type", "advanced").order("created_at", desc=True).execute()
@@ -939,12 +874,10 @@ async def list_advanced_documents(
         total_visual_elements = 0
         
         for doc in docs_result.data:
-            # Get chunk count for this document
             chunks_result = supabase.table("chunks").select(
                 "id", count="exact"
             ).eq("document_id", doc["id"]).eq("ingestion_type", "advanced").execute()
             
-            # Get visual elements count by type
             visual_result = supabase.table("visual_elements").select(
                 "element_type"
             ).eq("document_id", doc["id"]).execute()
@@ -973,7 +906,6 @@ async def list_advanced_documents(
                 images_extracted=images_count
             ))
         
-        # Calculate insights
         insights = {
             "total_documents": len(documents),
             "total_pages": total_pages,
@@ -1010,7 +942,6 @@ async def get_document_pdf(
     try:
         logger.info(f"Fetching PDF for advanced document: {document_id}")
         
-        # Get document record
         doc_result = supabase.table("documents").select(
             "id, filename, file_path, ingestion_type"
         ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
@@ -1024,7 +955,6 @@ async def get_document_pdf(
         if not file_path:
             raise HTTPException(status_code=404, detail="PDF file not found for this document")
         
-        # Get signed URL from storage (valid for 1 hour)
         pdf_url = storage.get_signed_url(file_path, expires_in=3600)
         
         return {
@@ -1054,7 +984,6 @@ async def get_document_images(
     try:
         logger.info(f"Fetching images for document: {document_id}")
         
-        # Get document to verify it exists
         doc_result = supabase.table("documents").select(
             "id, filename, ingestion_type"
         ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
@@ -1062,7 +991,6 @@ async def get_document_images(
         if not doc_result.data:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Get all visual elements (images only, not tables)
         visual_result = supabase.table("visual_elements").select(
             "id, element_type, page_number, file_path, text_annotation, metadata"
         ).eq("document_id", document_id).in_("element_type", ["image", "figure", "chart"]).execute()
@@ -1071,7 +999,6 @@ async def get_document_images(
         for ve in visual_result.data:
             image_url = None
             if ve.get("file_path"):
-                # Use signed URL for images (valid for 1 hour)
                 image_url = storage.get_signed_url(ve["file_path"], expires_in=3600)
             
             images.append({
@@ -1110,7 +1037,6 @@ async def get_document_tables(
     try:
         logger.info(f"Fetching tables for document: {document_id}")
         
-        # Get document to verify it exists
         doc_result = supabase.table("documents").select(
             "id, filename, ingestion_type"
         ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
@@ -1118,18 +1044,15 @@ async def get_document_tables(
         if not doc_result.data:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Get all visual elements (tables only)
         visual_result = supabase.table("visual_elements").select(
             "id, element_type, page_number, file_path, text_annotation, metadata"
         ).eq("document_id", document_id).eq("element_type", "table").execute()
         
         tables = []
         for ve in visual_result.data:
-            # Check if there's an image_path in metadata for table visualization
             table_image_url = None
             metadata = ve.get("metadata", {})
             
-            # Try to get image path from metadata or use file_path if it's an image
             if metadata.get("image_path"):
                 table_image_url = storage.get_signed_url(metadata["image_path"], expires_in=3600)
             elif ve.get("file_path") and ve["file_path"].endswith(('.png', '.jpg', '.jpeg')):
@@ -1176,7 +1099,6 @@ async def delete_advanced_document(
     try:
         logger.info(f"Deleting advanced document: {document_id}")
 
-        # Verify document exists and is advanced type
         doc_result = supabase.table("documents").select(
             "id, filename, ingestion_type"
         ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
@@ -1186,22 +1108,19 @@ async def delete_advanced_document(
 
         document = doc_result.data[0]
         filename = document["filename"]
-
-        # 1. Delete vectors from Qdrant (both text and visual collections)
+        
         logger.info(f"Deleting vectors from Qdrant for document {document_id}")
         try:
             qdrant_service.delete_by_document(document_id)
         except Exception as e:
             logger.warning(f"Failed to delete from Qdrant (may not exist): {e}")
-
-        # 2. Delete files from Supabase Storage
+        
         logger.info(f"Deleting files from storage for document {document_id}")
         try:
             storage.delete_document_files(document_id)
         except Exception as e:
             logger.warning(f"Failed to delete storage files (may not exist): {e}")
-
-        # 3. Delete embeddings
+        
         logger.info(f"Deleting embeddings for document {document_id}")
         try:
             # Get chunk IDs
@@ -1225,15 +1144,13 @@ async def delete_advanced_document(
                 supabase.table("embeddings").delete().in_("visual_element_id", visual_element_ids).execute()
         except Exception as e:
             logger.warning(f"Failed to delete embeddings: {e}")
-
-        # 4. Delete visual elements
+        
         logger.info(f"Deleting visual elements for document {document_id}")
         try:
             supabase.table("visual_elements").delete().eq("document_id", document_id).execute()
         except Exception as e:
             logger.warning(f"Failed to delete visual elements: {e}")
-
-        # 5. Delete chunks
+        
         logger.info(f"Deleting chunks for document {document_id}")
         try:
             supabase.table("chunks").delete().eq("document_id", document_id).eq(
@@ -1241,8 +1158,7 @@ async def delete_advanced_document(
             ).execute()
         except Exception as e:
             logger.warning(f"Failed to delete chunks: {e}")
-
-        # 6. Delete document record
+        
         logger.info(f"Deleting document record {document_id}")
         supabase.table("documents").delete().eq("id", document_id).eq(
             "ingestion_type", "advanced"

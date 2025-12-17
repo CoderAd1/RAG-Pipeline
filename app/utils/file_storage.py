@@ -223,8 +223,6 @@ class FileStorage:
             files = self.supabase.storage.from_(self.bucket_name).list(document_id)
             
             if files:
-                # Supabase list returns objects like {'name': 'images/image.png', 'id': '...', ...}
-                # We need the full path relative to the bucket root for removal
                 file_paths = [f"{document_id}/{f['name']}" for f in files if 'name' in f]
                 if file_paths:
                     self.supabase.storage.from_(self.bucket_name).remove(file_paths)
@@ -236,7 +234,6 @@ class FileStorage:
         except Exception as e:
             logger.error(f"Failed to delete files for document {document_id}: {e}")
     
-    # Legacy methods for compatibility (not used with Supabase Storage)
     def get_file_path(self, relative_path: str) -> Path:
         """
         Legacy method - returns path for compatibility.
@@ -248,15 +245,9 @@ class FileStorage:
     def file_exists(self, file_path: str) -> bool:
         """Check if file exists in Supabase Storage."""
         try:
-            # Attempt to download a small portion or metadata to check existence
-            # Supabase storage doesn't have a direct 'exists' method.
-            # Downloading the file and catching an error is one way.
-            # Another is to list the directory and check if the file is in the list.
-            # For simplicity, we'll use download and catch.
             self.supabase.storage.from_(self.bucket_name).download(file_path)
             return True
         except Exception as e:
-            # Supabase client raises an exception if the file is not found
             if "The resource was not found" in str(e):
                 return False
             logger.error(f"Error checking file existence for {file_path}: {e}")

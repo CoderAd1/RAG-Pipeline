@@ -88,7 +88,6 @@ def cleanup_qdrant():
                 
                 logger.info(f"Deleting all points from collection: {collection_name}...")
                 
-                # Use scroll to get all point IDs and delete them
                 all_points = []
                 offset = None
                 
@@ -189,9 +188,7 @@ def main():
                     item_name = item['name']
                     full_path = f"{folder_path}/{item_name}" if folder_path else item_name
                     
-                    # Check if it's a folder (id is None for folders in Supabase)
                     if item.get('id') is None:
-                        # It's a folder, recurse into it
                         logger.info(f"Exploring folder: {full_path}")
                         file_count += delete_folder_recursively(full_path)
                     else:
@@ -220,14 +217,7 @@ def main():
     except Exception as e:
         logger.error(f"Error cleaning Supabase Storage: {e}")
     
-    logger.info("\n" + "=" * 60)
-    logger.success("🎉 Cleanup process completed!")
-    logger.info("=" * 60)
-    logger.info("\nSummary:")
-    logger.info("  • All database tables cleared")
-    logger.info("  • All Qdrant collection points deleted (collections preserved)")
-    logger.info("  • All Supabase Storage files deleted")
-    logger.info("\n💡 You can now upload new documents with a clean slate!")
+    logger.success("Cleanup process completed!")    
 
 
 if __name__ == "__main__":

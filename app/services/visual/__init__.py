@@ -1,1 +1,0 @@
-"""Visual processing services package."""

@@ -123,20 +123,16 @@ class QueryExpander:
         expanded = self.expand_query(query)
         if expanded != query:
             variations.append(expanded)
-
-        # Check for "What does X stand for?" pattern
+        
         stand_for_match = re.search(r'what does (\w+) stand for', query, re.IGNORECASE)
         if stand_for_match:
             acronym = stand_for_match.group(1).upper()
             if acronym in self.ACRONYM_MAP:
                 expansion = self.ACRONYM_MAP[acronym]
-                # Add variation asking about the full name
                 variations.append(f"What is {expansion}?")
                 variations.append(f"{acronym} {expansion}")
 
-        # Check for "key innovation" or "main idea" patterns
         if re.search(r'key (innovation|contribution|idea)', query, re.IGNORECASE):
-            # Extract the subject
             subject_match = re.search(r'(of|in) (\w+)', query, re.IGNORECASE)
             if subject_match:
                 subject = subject_match.group(2)

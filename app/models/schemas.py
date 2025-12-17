@@ -5,8 +5,7 @@ from typing import List, Optional, Literal
 from datetime import datetime
 
 
-# ============= Upload Schemas =============
-
+# Upload Schemas
 class UploadResponse(BaseModel):
     """Response for document upload."""
     document_id: str
@@ -25,8 +24,7 @@ class AdvancedUploadResponse(UploadResponse):
     images_extracted: int
 
 
-# ============= Query Schemas =============
-
+# Query Schemas
 class QueryRequest(BaseModel):
     """Request for querying the RAG system."""
     query: str = Field(..., min_length=1, description="User question")
@@ -70,8 +68,7 @@ class AdvancedQueryResponse(QueryResponse):
     visual_elements: List[VisualReference] = []
 
 
-# ============= Document Schemas =============
-
+# Document Schemas
 class DocumentInfo(BaseModel):
     """Document information."""
     id: str
@@ -93,8 +90,7 @@ class DocumentListResponse(BaseModel):
     insights: Optional[dict] = None
 
 
-# ============= Chunk Schemas =============
-
+# Chunk Schemas
 class ChunkData(BaseModel):
     """Chunk data structure."""
     text: str

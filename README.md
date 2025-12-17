@@ -2,7 +2,24 @@
 
 A comprehensive Retrieval-Augmented Generation (RAG) system with two distinct pipelines: **Basic RAG** for simple text extraction and **Advanced RAG** for multimodal document processing with tables and images.
 
-## 🌟 Features
+## Table of Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [API Usage](#api-usage)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Performance Considerations](#performance-considerations)
+- [Troubleshooting](#troubleshooting)
+- [Ethical Considerations](#ethical-considerations)
+- [Evaluation Guide](#evaluation-guide)
+- [License](#license)
+- [Contributing](#contributing)
+- [Support](#support)
+
+## Features
 
 ### Basic RAG Pipeline
 - Simple PDF text extraction using PyMuPDF
@@ -26,7 +43,7 @@ A comprehensive Retrieval-Augmented Generation (RAG) system with two distinct pi
 - **Hybrid Approach**: Best-in-class models for each task type
 - **Fallback Support**: Graceful degradation if vision API unavailable
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.9+
 - Supabase account (for database)
@@ -34,7 +51,7 @@ A comprehensive Retrieval-Augmented Generation (RAG) system with two distinct pi
 - Groq API key (for text generation)
 - Google API key (optional, for vision tasks)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Clone and Setup
 
@@ -100,7 +117,7 @@ The API will be available at `http://localhost:8000`
 - **API Documentation**: http://localhost:8000/docs
 - **Alternative Docs**: http://localhost:8000/redoc
 
-## 📚 API Usage
+## API Usage
 
 ### Basic RAG
 
@@ -173,7 +190,93 @@ curl -X POST "http://localhost:8000/api/v1/advanced/query" \
   }'
 ```
 
-## 🏗️ Architecture
+## Architecture
+
+### High-Level Design
+
+```mermaid
+flowchart TB
+    subgraph Client["Frontend (React)"]
+        UI[User Interface]
+    end
+
+    subgraph API["FastAPI Backend"]
+        BR["/api/v1/basic/*"]
+        AR["/api/v1/advanced/*"]
+    end
+
+    subgraph Processing["Document Processing"]
+        direction TB
+        BP["Basic Processor<br/>(PyMuPDF)"]
+        AP["Advanced Processor<br/>(Docling)"]
+        TP["Table Processor"]
+        IP["Image Processor"]
+    end
+
+    subgraph Chunking["Text Chunking"]
+        FC["Fixed-Size Chunker"]
+        SC["Semantic Chunker"]
+    end
+
+    subgraph Embedding["Embedding Service"]
+        ES["Sentence Transformers<br/>(all-MiniLM-L6-v2)"]
+    end
+
+    subgraph VectorDB["Qdrant Vector Store"]
+        BC[("basic_rag_collection")]
+        TC[("advanced_text_collection")]
+        VC[("advanced_visual_collection")]
+    end
+
+    subgraph Storage["Supabase"]
+        DB[(PostgreSQL)]
+        SB[(Storage Bucket)]
+    end
+
+    subgraph LLM["LLM Services"]
+        GQ["Groq API<br/>(Llama 3.3 70B)"]
+        GM["Google Gemini<br/>(Vision Tasks)"]
+    end
+
+    UI --> BR & AR
+    
+    BR --> BP --> FC --> ES --> BC
+    AR --> AP --> SC --> ES --> TC & VC
+    AP --> TP & IP
+    TP & IP --> VC
+    
+    BC & TC & VC --> ES
+    ES --> GQ
+    AP -.-> GM
+    
+    BP & AP --> DB
+    IP --> SB
+    TP --> SB
+    
+    GQ --> UI
+```
+
+### Query Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant A as FastAPI
+    participant E as Embeddings
+    participant Q as Qdrant
+    participant L as Groq LLM
+
+    U->>F: Submit Question
+    F->>A: POST /query
+    A->>E: Embed Query
+    E->>Q: Similarity Search
+    Q-->>A: Top-K Chunks
+    A->>L: Generate Answer<br/>(Question + Context)
+    L-->>A: Answer + Citations
+    A-->>F: Response JSON
+    F-->>U: Display Answer
+```
 
 ### Project Structure
 
@@ -251,7 +354,7 @@ RAG/
 - `embeddings` - Vector references
 - `query_logs` - Query analytics
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -280,7 +383,7 @@ You can change the `DEFAULT_LLM_MODEL` to any of these Groq models:
 | `mixtral-8x7b-32768` | Mixtral 8x7B | Large context (32k tokens) |
 | `gemma2-9b-it` | Google Gemma 2 9B | Efficient, good quality |
 
-## 🧪 Testing
+## Testing
 
 ### Test Basic RAG
 
@@ -322,14 +425,14 @@ response = requests.post(
 print(response.json())
 ```
 
-## 📊 Performance Considerations
+## Performance Considerations
 
 - **Batch Processing**: Embeddings are generated in batches for efficiency
 - **Singleton Pattern**: Embedding model loaded once and reused
 - **Collection Separation**: Clean isolation between basic and advanced pipelines
 - **Async Operations**: FastAPI async endpoints for better concurrency
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Docling Installation Issues
 
@@ -362,7 +465,7 @@ docker restart <qdrant-container>
 
 The advanced pipeline uses Docling's `export_to_text()` method to ensure clean text extraction without XML-like structure markers. If you see unusual formatting in chunks, verify that Docling is properly installed.
 
-## ⚖️ Ethical Considerations
+## Ethical Considerations
 
 This section addresses ethical implications, limitations, and responsible use of the RAG Pipeline system.
 
@@ -458,7 +561,7 @@ This section addresses ethical implications, limitations, and responsible use of
 
 ---
 
-## 📊 Evaluation Guide
+## Evaluation Guide
 
 This section describes how to run evaluations and interpret results.
 
@@ -493,10 +596,10 @@ python evaluation/run_evaluation.py --methods no_rag basic_rag advanced_rag
 
 | Metric | What it Measures | Range | Priority |
 |--------|------------------|-------|----------|
-| **Faithfulness** | Is answer grounded in retrieved context? | 0-1 | ⭐⭐⭐ Critical |
-| **Answer Relevancy** | Does answer address the question? | 0-1 | ⭐⭐⭐ Critical |
-| **Keyword Overlap** | % of expected keywords in answer | 0-1 | ⭐⭐ Medium |
-| **Accuracy** | Token overlap with expected (Jaccard) | 0-1 | ⭐ Secondary |
+| **Faithfulness** | Is answer grounded in retrieved context? | 0-1 | Critical |
+| **Answer Relevancy** | Does answer address the question? | 0-1 | Critical |
+| **Keyword Overlap** | % of expected keywords in answer | 0-1 | Medium |
+| **Accuracy** | Token overlap with expected (Jaccard) | 0-1 | Secondary |
 
 #### Retrieval Metrics
 
@@ -569,15 +672,16 @@ Edit `evaluation/datasets/test_queries.json`:
   "difficulty": "medium",
   "category": "custom"
 }
+```
 
-## 📝 License
+## License
 
 MIT License
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Please feel free to submit a Pull Request.
 
-## 📧 Support
+## Support
 
 For issues and questions, please open an issue on GitHub.

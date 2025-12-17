@@ -51,22 +51,18 @@ async def upload_pdf(
     - Stores in basic_rag_collection
     """
     try:
-        # Validate file
         sanitized_filename = FileValidator.validate_and_sanitize(file)
         logger.info(f"Processing upload: {sanitized_filename}")
         
-        # Save to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             content = await file.read()
             tmp_file.write(content)
             tmp_path = tmp_file.name
         
         try:
-            # Extract text
             logger.info("Extracting text from PDF...")
             extracted_data = pdf_processor.extract_text(tmp_path)
             
-            # Create document record
             doc_data = {
                 "filename": sanitized_filename,
                 "file_path": None,
@@ -80,7 +76,6 @@ async def upload_pdf(
             document_id = result.data[0]["id"]
             logger.info(f"Created document record: {document_id}")
             
-            # Store PDF in Supabase Storage
             logger.info("Storing PDF in Supabase Storage...")
             pdf_storage_path = storage.save_pdf(
                 document_id=document_id,
@@ -88,12 +83,10 @@ async def upload_pdf(
                 pdf_data=content
             )
             
-            # Update document with file path
             supabase.table("documents").update({
                 "file_path": pdf_storage_path
             }).eq("id", document_id).execute()
             
-            # Create chunks
             logger.info("Creating chunks...")
             chunker = FixedSizeChunker(chunk_size=1000, overlap=200)
             all_chunks = []
@@ -108,7 +101,6 @@ async def upload_pdf(
             if not all_chunks:
                 raise ValueError("No text chunks created from PDF")
             
-            # Store chunks in database
             chunk_records = []
             for chunk in all_chunks:
                 chunk_record = {
@@ -126,19 +118,16 @@ async def upload_pdf(
             stored_chunks = chunks_result.data
             logger.info(f"Stored {len(stored_chunks)} chunks in database")
             
-            # Generate embeddings
             logger.info("Generating embeddings...")
             texts = [chunk["text"] for chunk in all_chunks]
             embeddings = embedding_service.embed_batch(texts)
             
-            # Prepare chunks with IDs for vector storage
             chunks_with_ids = []
             for chunk, stored_chunk in zip(all_chunks, stored_chunks):
                 chunk_copy = chunk.copy()
                 chunk_copy["chunk_id"] = stored_chunk["id"]
                 chunks_with_ids.append(chunk_copy)
             
-            # Store in Qdrant
             logger.info("Storing vectors in Qdrant...")
             vector_ids = qdrant_service.insert_chunks(
                 chunks=chunks_with_ids,
@@ -146,7 +135,6 @@ async def upload_pdf(
                 document_id=document_id
             )
             
-            # Store embedding records
             embedding_records = []
             for chunk_id, vector_id in zip([c["id"] for c in stored_chunks], vector_ids):
                 embedding_records.append({
@@ -159,7 +147,6 @@ async def upload_pdf(
             
             supabase.table("embeddings").insert(embedding_records).execute()
             
-            # Update document status
             supabase.table("documents").update({
                 "processing_status": "completed"
             }).eq("id", document_id).execute()
@@ -183,7 +170,6 @@ async def upload_pdf(
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         
-        # Update document status if created
         if 'document_id' in locals():
             try:
                 supabase.table("documents").update({
@@ -417,8 +403,7 @@ async def delete_basic_document(
     """
     try:
         logger.info(f"Deleting basic document: {document_id}")
-
-        # Verify document exists and is basic type
+        
         doc_result = supabase.table("documents").select(
             "id, filename, ingestion_type"
         ).eq("id", document_id).eq("ingestion_type", "basic").execute()
@@ -429,24 +414,20 @@ async def delete_basic_document(
         document = doc_result.data[0]
         filename = document["filename"]
 
-        # 1. Delete vectors from Qdrant
         logger.info(f"Deleting vectors from Qdrant for document {document_id}")
         try:
             qdrant_service.delete_by_document(document_id)
         except Exception as e:
             logger.warning(f"Failed to delete from Qdrant (may not exist): {e}")
 
-        # 2. Delete files from Supabase Storage
         logger.info(f"Deleting files from storage for document {document_id}")
         try:
             storage.delete_document_files(document_id)
         except Exception as e:
             logger.warning(f"Failed to delete storage files (may not exist): {e}")
 
-        # 3. Delete embeddings (will cascade delete based on foreign keys)
         logger.info(f"Deleting embeddings for document {document_id}")
         try:
-            # Get chunk IDs first
             chunks_result = supabase.table("chunks").select("id").eq(
                 "document_id", document_id
             ).eq("ingestion_type", "basic").execute()
@@ -454,12 +435,10 @@ async def delete_basic_document(
             chunk_ids = [c["id"] for c in chunks_result.data]
 
             if chunk_ids:
-                # Delete embeddings
                 supabase.table("embeddings").delete().in_("chunk_id", chunk_ids).execute()
         except Exception as e:
             logger.warning(f"Failed to delete embeddings: {e}")
 
-        # 4. Delete chunks
         logger.info(f"Deleting chunks for document {document_id}")
         try:
             supabase.table("chunks").delete().eq("document_id", document_id).eq(
@@ -468,7 +447,6 @@ async def delete_basic_document(
         except Exception as e:
             logger.warning(f"Failed to delete chunks: {e}")
 
-        # 5. Delete document record
         logger.info(f"Deleting document record {document_id}")
         supabase.table("documents").delete().eq("id", document_id).eq(
             "ingestion_type", "basic"

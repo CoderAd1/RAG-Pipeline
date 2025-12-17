@@ -136,10 +136,9 @@ class BM25Retriever:
 
         scores = self.get_scores(query)
 
-        # Create results with scores
         results = []
         for i, score in enumerate(scores):
-            if score > 0:  # Only include documents with positive scores
+            if score > 0:
                 results.append({
                     "document": self.corpus[i],
                     "score": score,

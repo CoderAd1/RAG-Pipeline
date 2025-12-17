@@ -12,8 +12,8 @@ class FixedSizeChunker:
         Initialize fixed-size chunker.
 
         Args:
-            chunk_size: Maximum characters per chunk (default: 1500, increased from 1000)
-            overlap: Number of overlapping characters between chunks (default: 300, increased from 200)
+            chunk_size: Maximum characters per chunk
+            overlap: Number of overlapping characters between chunks
         """
         self.chunk_size = chunk_size
         self.overlap = overlap
@@ -40,14 +40,12 @@ class FixedSizeChunker:
             end = start + self.chunk_size
             chunk_text = text[start:end]
 
-            # Try to break at sentence boundary if possible
             if end < len(text):
-                # Look for sentence endings
                 last_period = chunk_text.rfind('. ')
                 last_newline = chunk_text.rfind('\n')
                 break_point = max(last_period, last_newline)
 
-                if break_point > self.chunk_size * 0.5:  # Only break if we're past halfway
+                if break_point > self.chunk_size * 0.5:
                     chunk_text = chunk_text[:break_point + 1]
                     end = start + break_point + 1
 
@@ -110,7 +108,6 @@ class SemanticChunker:
         chunks = []
         chunk_index = 0
 
-        # Create table-to-page mapping for quick lookup
         tables = tables or []
         tables_by_page = {}
         for table in tables:
@@ -119,7 +116,6 @@ class SemanticChunker:
                 tables_by_page[page] = []
             tables_by_page[page].append(table)
 
-        # Group sections by page for context-aware chunking
         sections_by_page = {}
         for section in sections:
             page = section.get("page", 1)
@@ -127,20 +123,17 @@ class SemanticChunker:
                 sections_by_page[page] = []
             sections_by_page[page].append(section)
 
-        # Process each page
         all_pages = sorted(set(list(sections_by_page.keys()) + list(tables_by_page.keys())))
 
         for page in all_pages:
             page_sections = sections_by_page.get(page, [])
             page_tables = tables_by_page.get(page, [])
 
-            # Chunk page sections
             for section in page_sections:
                 section_chunks = self._chunk_section(section, chunk_index)
                 chunks.extend(section_chunks)
                 chunk_index += len(section_chunks)
 
-            # Create dedicated table chunks with context
             for table in page_tables:
                 table_chunk = self._create_table_chunk(
                     table=table,
@@ -168,7 +161,6 @@ class SemanticChunker:
         section_type = section.get("type", "paragraph")
 
         if not text or len(text) < self.min_chunk_size:
-            # Small section, keep as single chunk
             return [{
                 "text": text,
                 "page_number": page_number,
@@ -180,7 +172,6 @@ class SemanticChunker:
                 }
             }]
 
-        # Split large sections into paragraphs
         paragraphs = text.split('\n\n')
         chunks = []
         current_chunk = ""
@@ -208,7 +199,6 @@ class SemanticChunker:
                     chunk_idx += 1
                 current_chunk = para + "\n\n"
 
-        # Add remaining text
         if current_chunk:
             chunks.append({
                 "text": current_chunk.strip(),
@@ -233,25 +223,19 @@ class SemanticChunker:
         table_markdown = table.get("markdown", table.get("text", ""))
         page_num = table.get("page", 1)
 
-        # Parse table for searchable metadata
         table_metadata = self._extract_table_metadata(table_markdown)
 
-        # Get surrounding context (text before/after table on same page)
         context_parts = []
         page_text = "\n\n".join([s.get("text", "") for s in page_sections if s.get("text", "").strip()])
 
-        # Limit context to table_context_window
         if page_text:
             if len(page_text) > self.table_context_window:
-                # Take first part of page text as context
                 context_parts.append(page_text[:self.table_context_window] + "...")
             else:
                 context_parts.append(page_text)
 
-        # Build the enriched chunk text with extensive searchable metadata
         chunk_text_parts = []
 
-        # Add searchable keywords at the top for better embedding
         keywords_parts = []
         if table_metadata["headers"]:
             keywords_parts.append(f"Table columns: {', '.join(table_metadata['headers'])}")
@@ -263,7 +247,6 @@ class SemanticChunker:
         if keywords_parts:
             chunk_text_parts.append("TABLE METADATA:\n" + "\n".join(keywords_parts))
 
-        # ULTRA-SEARCHABLE: Extract all table cell values as plain text
         plain_text_data = self._extract_table_plain_text(table_markdown, table_metadata)
         if plain_text_data:
             chunk_text_parts.append(f"\nTABLE CONTENT (SEARCHABLE):\n{plain_text_data}")
@@ -271,10 +254,8 @@ class SemanticChunker:
         if context_parts:
             chunk_text_parts.append("\nCONTEXT:\n" + "\n".join(context_parts))
 
-        # Add table with clear markers for better retrieval
         chunk_text_parts.append(f"\nTABLE DATA (Page {page_num}):\n{table_markdown}")
 
-        # Add interpretive description if available
         table_annotation = table.get("text_annotation", "")
         if table_annotation:
             chunk_text_parts.append(f"\nTABLE DESCRIPTION: {table_annotation}")
@@ -313,21 +294,18 @@ class SemanticChunker:
         if not markdown or markdown.strip() == "| Table data unavailable |":
             return ""
 
-        # Parse table structure
         lines = [l.strip() for l in markdown.split('\n') if l.strip() and l.strip().startswith('|')]
         data_lines = [l for l in lines if not all(c in '|-: ' for c in l)]
 
-        if len(data_lines) < 2:  # Need at least header + 1 data row
+        if len(data_lines) < 2:
             return ""
 
-        # Parse headers
         header_line = data_lines[0]
         headers = [h.strip() for h in header_line.split('|') if h.strip()]
 
         if not headers:
             return ""
 
-        # Parse data rows and create natural language descriptions
         plain_text_parts = []
 
         for row_line in data_lines[1:]:
@@ -336,10 +314,8 @@ class SemanticChunker:
             if not cells or len(cells) != len(headers):
                 continue
 
-            # Create sentence for this row
-            row_label = cells[0]  # First column is usually the row label/variable
+            row_label = cells[0]
 
-            # Build natural language: "variable_name: header1=value1, header2=value2, ..."
             value_pairs = []
             for i, (header, value) in enumerate(zip(headers, cells)):
                 if i == 0:
@@ -363,34 +339,31 @@ class SemanticChunker:
         if not markdown or markdown.strip() == "| Table data unavailable |":
             return {"headers": [], "row_labels": [], "statistical_terms": []}
 
-        # Parse table structure
         lines = [l.strip() for l in markdown.split('\n') if l.strip() and l.strip().startswith('|')]
 
-        # Remove separator lines
         data_lines = [l for l in lines if not all(c in '|-: ' for c in l)]
 
         if not data_lines:
             return {"headers": [], "row_labels": [], "statistical_terms": []}
 
-        # Extract headers (first line)
         headers = []
         if data_lines:
             first_line = data_lines[0]
             headers = [h.strip() for h in first_line.split('|') if h.strip()]
 
-        # Extract row labels (first column of each data row, excluding header)
+        row_labels = []
+        if len(data_lines) > 1:
+            for line in data_lines[1:]:
+                cells = [c.strip() for c in line.split('|') if c.strip()]
         row_labels = []
         if len(data_lines) > 1:
             for line in data_lines[1:]:
                 cells = [c.strip() for c in line.split('|') if c.strip()]
                 if cells:
-                    # Clean up row labels - handle various formats
                     label = cells[0]
-                    # Common patterns in statistical tables
                     if label and label not in ['(Intercept)', '---', '...']:
                         row_labels.append(label)
 
-        # Identify statistical keywords in the table
         stat_keywords = ['p-value', 'p.value', 'pvalue', 'p value', 'coefficient', 'coef',
                         'std', 'stderr', 'se', 'conf', 'interval', 't-stat', 't value',
                         'z-score', 'chi-square', 'df', 'mean', 'median', 'correlation',
@@ -406,8 +379,8 @@ class SemanticChunker:
                     statistical_terms.append(term)
 
         return {
-            "headers": headers[:10],  # First 10 headers
-            "row_labels": row_labels[:15],  # First 15 row labels
+            "headers": headers[:10],
+            "row_labels": row_labels[:15],
             "statistical_terms": statistical_terms
         }
 

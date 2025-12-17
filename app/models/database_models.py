@@ -13,8 +13,8 @@ class Document:
     file_path: Optional[str]
     upload_date: datetime
     total_pages: int
-    processing_status: str  # 'pending', 'processing', 'completed', 'failed'
-    ingestion_type: str  # 'basic' or 'advanced'
+    processing_status: str
+    ingestion_type: str
     metadata: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -30,7 +30,7 @@ class Chunk:
     chunk_index: int
     page_number: int
     parent_chunk_id: Optional[str] = None
-    chunk_type: Optional[str] = None  # 'text', 'table_context', 'image_context'
+    chunk_type: Optional[str] = None
     ingestion_type: str = 'basic'
     visual_element_ids: Optional[List[str]] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -42,7 +42,7 @@ class VisualElement:
     """Visual element database model."""
     id: str
     document_id: str
-    element_type: str  # 'table', 'image', 'chart', 'figure'
+    element_type: str
     page_number: int
     text_annotation: str
     bounding_box: Optional[Dict[str, Any]] = None

@@ -217,14 +217,3 @@ class ImageProcessor:
         description += f" from page {page}"
 
         return description
-
-    def extract_image_text_ocr(self, image_data: bytes) -> str:
-        """
-        Extract text from image using OCR.
-
-        This is a placeholder for OCR functionality.
-        In production, integrate with Tesseract or cloud OCR services.
-        """
-        # Placeholder - would use pytesseract or similar
-        logger.debug("OCR extraction not implemented")
-        return ""

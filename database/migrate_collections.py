@@ -41,13 +41,9 @@ def migrate_qdrant_collections(
         "advanced_visual_collection"
     ]
 
-    logger.info("=" * 80)
-    logger.info("QDRANT COLLECTION MIGRATION")
-    logger.info("=" * 80)
     logger.info(f"Old embedding dimension: {old_dimension}")
     logger.info(f"New embedding dimension: {new_dimension}")
     logger.info(f"Collections to migrate: {', '.join(collections_to_migrate)}")
-    logger.info("=" * 80)
 
     # Get existing collections
     existing_collections = client.get_collections().collections
@@ -115,13 +111,11 @@ def migrate_qdrant_collections(
                     )
                 )
 
-                # Note: Actual data copying would require scrolling through all points
-                # and copying them, which is beyond the scope of this migration script
-                logger.warning(f"  ⚠ Backup collection created, but you need to manually copy data!")
-                logger.info(f"  Use Qdrant's scroll API to copy vectors from {collection_name} to {backup_name}")
+                logger.warning(f"Backup collection created, but you need to manually copy data!")
+                logger.info(f"Use Qdrant's scroll API to copy vectors from {collection_name} to {backup_name}")
 
             except Exception as e:
-                logger.error(f"  Failed to create backup: {e}")
+                logger.error(f"Failed to create backup: {e}")
 
         # Ask for confirmation to delete
         logger.warning(f"\n  ATTENTION: To migrate '{collection_name}':")
@@ -129,9 +123,6 @@ def migrate_qdrant_collections(
         logger.warning(f"  2. A new empty collection with {new_dimension}-dim vectors will be created")
         logger.warning(f"  3. You must RE-INDEX all documents using the new embedding model")
 
-    logger.info("\n" + "=" * 80)
-    logger.info("MIGRATION OPTIONS")
-    logger.info("=" * 80)
     logger.warning("\nTo complete the migration, choose one of these options:")
     logger.info("\n1. AUTOMATIC RECREATION (deletes data):")
     logger.info("   Run this script with --force flag to delete old collections")

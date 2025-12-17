@@ -222,7 +222,7 @@ Score:"""
                 return min(max(score, 0.0), 1.0)
             else:
                 logger.warning(f"Could not parse relevancy score from: {score_text}")
-                return 0.5  # Default to middle score
+                return 0.5 
             
         except Exception as e:
             logger.error(f"Relevancy evaluation failed: {e}")
