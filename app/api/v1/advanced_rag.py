@@ -429,6 +429,7 @@ async def upload_pdf_advanced(
                     "document_id": document_id,
                     "element_type": "table",
                     "page_number": processed_table["page_number"],
+                    "bounding_box": None,
                     "file_path": processed_table.get("file_path"),  # Table image path
                     "table_markdown": processed_table.get("table_markdown"),
                     "text_annotation": processed_table["text_annotation"],
@@ -455,6 +456,7 @@ async def upload_pdf_advanced(
                     "page_number": processed_image["page_number"],
                     "bounding_box": processed_image.get("bounding_box"),
                     "file_path": processed_image.get("file_path"),
+                    "table_markdown": None,
                     "text_annotation": processed_image["text_annotation"],
                     "ingestion_type": "advanced",
                     "metadata": processed_image.get("metadata", {})
@@ -531,6 +533,7 @@ async def upload_pdf_advanced(
             for chunk_id, vector_id in zip([c["id"] for c in stored_chunks], text_vector_ids):
                 text_embedding_records.append({
                     "chunk_id": chunk_id,
+                    "visual_element_id": None,
                     "collection_name": "advanced_text_collection",
                     "vector_id": vector_id,
                     "embedding_model": embedding_service.get_model_name(),
@@ -569,6 +572,7 @@ async def upload_pdf_advanced(
                 visual_embedding_records = []
                 for ve_id, vector_id in zip([ve["id"] for ve in visual_elements_data], visual_vector_ids):
                     visual_embedding_records.append({
+                        "chunk_id": None,
                         "visual_element_id": ve_id,
                         "collection_name": "advanced_visual_collection",
                         "vector_id": vector_id,
@@ -1097,3 +1101,109 @@ async def get_document_tables(
     except Exception as e:
         logger.error(f"Failed to get tables: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/documents/{document_id}")
+async def delete_advanced_document(
+    document_id: str,
+    supabase: Client = Depends(get_supabase),
+    qdrant_service: QdrantAdvancedService = Depends(get_qdrant_advanced)
+):
+    """
+    Delete a document and all associated data from advanced RAG system.
+
+    Removes:
+    - Document record from database
+    - All chunks and embeddings
+    - All visual elements (tables, images)
+    - All vectors from Qdrant (both text and visual collections)
+    - All files from Supabase Storage
+    """
+    try:
+        logger.info(f"Deleting advanced document: {document_id}")
+
+        # Verify document exists and is advanced type
+        doc_result = supabase.table("documents").select(
+            "id, filename, ingestion_type"
+        ).eq("id", document_id).eq("ingestion_type", "advanced").execute()
+
+        if not doc_result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        document = doc_result.data[0]
+        filename = document["filename"]
+
+        # 1. Delete vectors from Qdrant (both text and visual collections)
+        logger.info(f"Deleting vectors from Qdrant for document {document_id}")
+        try:
+            qdrant_service.delete_by_document(document_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete from Qdrant (may not exist): {e}")
+
+        # 2. Delete files from Supabase Storage
+        logger.info(f"Deleting files from storage for document {document_id}")
+        try:
+            storage.delete_document_files(document_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete storage files (may not exist): {e}")
+
+        # 3. Delete embeddings
+        logger.info(f"Deleting embeddings for document {document_id}")
+        try:
+            # Get chunk IDs
+            chunks_result = supabase.table("chunks").select("id").eq(
+                "document_id", document_id
+            ).eq("ingestion_type", "advanced").execute()
+            chunk_ids = [c["id"] for c in chunks_result.data]
+
+            # Get visual element IDs
+            visual_result = supabase.table("visual_elements").select("id").eq(
+                "document_id", document_id
+            ).execute()
+            visual_element_ids = [v["id"] for v in visual_result.data]
+
+            # Delete chunk embeddings
+            if chunk_ids:
+                supabase.table("embeddings").delete().in_("chunk_id", chunk_ids).execute()
+
+            # Delete visual embeddings
+            if visual_element_ids:
+                supabase.table("embeddings").delete().in_("visual_element_id", visual_element_ids).execute()
+        except Exception as e:
+            logger.warning(f"Failed to delete embeddings: {e}")
+
+        # 4. Delete visual elements
+        logger.info(f"Deleting visual elements for document {document_id}")
+        try:
+            supabase.table("visual_elements").delete().eq("document_id", document_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to delete visual elements: {e}")
+
+        # 5. Delete chunks
+        logger.info(f"Deleting chunks for document {document_id}")
+        try:
+            supabase.table("chunks").delete().eq("document_id", document_id).eq(
+                "ingestion_type", "advanced"
+            ).execute()
+        except Exception as e:
+            logger.warning(f"Failed to delete chunks: {e}")
+
+        # 6. Delete document record
+        logger.info(f"Deleting document record {document_id}")
+        supabase.table("documents").delete().eq("id", document_id).eq(
+            "ingestion_type", "advanced"
+        ).execute()
+
+        logger.success(f"Successfully deleted advanced document {document_id} ({filename})")
+
+        return {
+            "success": True,
+            "message": f"Document '{filename}' deleted successfully",
+            "document_id": document_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete document: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")

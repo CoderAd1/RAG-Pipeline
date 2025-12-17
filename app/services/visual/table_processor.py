@@ -1,6 +1,6 @@
 """Table processing and description generation."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
 from loguru import logger
 from app.utils.file_storage import storage
