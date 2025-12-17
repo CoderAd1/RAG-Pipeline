@@ -36,3 +36,6 @@ aiofiles==23.2.1
 
 # Logging and monitoring
 loguru==0.7.2
+
+# Testing
+pytest>=7.0.0
