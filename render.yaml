@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: rag-backend
+    runtime: python
+    plan: standard  # torch + sentence-transformers need ~2GB RAM; free tier (512MB) will OOM
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SUPABASE_URL
+        sync: false  # set in Render dashboard
+      - key: SUPABASE_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false  # set to your Vercel URL, e.g. https://your-app.vercel.app
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2  # lighter than all-mpnet-base-v2
+      - key: EMBEDDING_DIMENSION
+        value: "384"

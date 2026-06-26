@@ -6,7 +6,7 @@ from loguru import logger
 import sys
 
 from app.core.config import settings
-from app.api.v1 import basic_rag, advanced_rag
+from app.api.v1 import basic_rag, advanced_rag, auth
 
 # Configure logging
 logger.remove()
@@ -26,15 +26,17 @@ app = FastAPI(
 )
 
 # Configure CORS
+_origins = [settings.frontend_url] if settings.frontend_url else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_origins,
+    allow_credentials=bool(settings.frontend_url),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(basic_rag.router, prefix="/api/v1")
 app.include_router(advanced_rag.router, prefix="/api/v1")
 

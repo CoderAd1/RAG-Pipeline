@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 const api = axios.create({
-    baseURL: '/api/v1',
+    baseURL: `${BASE_URL}/api/v1`,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -11,7 +13,7 @@ export const uploadBasic = async (file, onProgress) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await axios.post('/api/v1/basic/upload', formData, {
+    const response = await axios.post(`${BASE_URL}/api/v1/basic/upload`, formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
         },
@@ -30,7 +32,7 @@ export const uploadAdvanced = async (file, onProgress) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await axios.post('/api/v1/advanced/upload', formData, {
+    const response = await axios.post(`${BASE_URL}/api/v1/advanced/upload`, formData, {
         headers: {
             'Content-Type': 'multipart/form-data',
         },
@@ -71,7 +73,7 @@ export const queryAdvanced = async (query, topK = 10) => {
 // Get basic documents list
 export const getBasicDocuments = async () => {
     try {
-        const response = await axios.get('/api/v1/basic/documents')
+        const response = await axios.get(`${BASE_URL}/api/v1/basic/documents`)
         return response.data
     } catch (error) {
         console.error('Get basic documents error:', error)
@@ -82,7 +84,7 @@ export const getBasicDocuments = async () => {
 // Get advanced documents list
 export const getAdvancedDocuments = async () => {
     try {
-        const response = await axios.get('/api/v1/advanced/documents')
+        const response = await axios.get(`${BASE_URL}/api/v1/advanced/documents`)
         return response.data
     } catch (error) {
         console.error('Get advanced documents error:', error)
@@ -93,7 +95,7 @@ export const getAdvancedDocuments = async () => {
 // Get PDF URL for a document
 export const getDocumentPdf = async (documentId, ingestionType = 'basic') => {
     try {
-        const endpoint = ingestionType === 'basic' ? '/api/v1/basic' : '/api/v1/advanced'
+        const endpoint = ingestionType === 'basic' ? `${BASE_URL}/api/v1/basic` : `${BASE_URL}/api/v1/advanced`
         const response = await axios.get(`${endpoint}/documents/${documentId}/pdf`)
         return response.data
     } catch (error) {
@@ -105,7 +107,7 @@ export const getDocumentPdf = async (documentId, ingestionType = 'basic') => {
 // Get images for an advanced document
 export const getDocumentImages = async (documentId) => {
     try {
-        const response = await axios.get(`/api/v1/advanced/documents/${documentId}/images`)
+        const response = await axios.get(`${BASE_URL}/api/v1/advanced/documents/${documentId}/images`)
         return response.data
     } catch (error) {
         console.error('Get document images error:', error)
@@ -116,7 +118,7 @@ export const getDocumentImages = async (documentId) => {
 // Get tables for an advanced document
 export const getDocumentTables = async (documentId) => {
     try {
-        const response = await axios.get(`/api/v1/advanced/documents/${documentId}/tables`)
+        const response = await axios.get(`${BASE_URL}/api/v1/advanced/documents/${documentId}/tables`)
         return response.data
     } catch (error) {
         console.error('Get document tables error:', error)
@@ -127,7 +129,7 @@ export const getDocumentTables = async (documentId) => {
 // Delete a document (basic or advanced)
 export const deleteDocument = async (documentId, ingestionType = 'basic') => {
     try {
-        const endpoint = ingestionType === 'basic' ? '/api/v1/basic' : '/api/v1/advanced'
+        const endpoint = ingestionType === 'basic' ? `${BASE_URL}/api/v1/basic` : `${BASE_URL}/api/v1/advanced`
         const response = await axios.delete(`${endpoint}/documents/${documentId}`)
         return response.data
     } catch (error) {

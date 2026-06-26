@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Storage
     storage_path: str = Field(default="./storage", env="STORAGE_PATH")
 
+    # CORS
+    frontend_url: Optional[str] = Field(default=None, env="FRONTEND_URL")
+
     class Config:
         env_file = ".env"
         case_sensitive = False
