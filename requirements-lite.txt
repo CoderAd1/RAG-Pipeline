@@ -16,8 +16,8 @@ fastembed>=0.3.6
 qdrant-client==1.7.3
 
 # Database
-supabase==2.3.0
-postgrest==0.13.2
+supabase>=2.10.0
+postgrest>=0.18.0
 
 # LLM Integration
 groq>=0.37.0
