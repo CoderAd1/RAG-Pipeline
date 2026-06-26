@@ -2,9 +2,9 @@ services:
   - type: web
     name: rag-backend
     runtime: python
-    plan: standard  # torch + sentence-transformers need ~2GB RAM; free tier (512MB) will OOM
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free  # fastembed (ONNX) keeps peak RAM well under 512MB
+    buildCommand: pip install -r requirements-lite.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /health
     envVars:
       - key: ENVIRONMENT
@@ -23,7 +23,18 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false  # set to your Vercel URL, e.g. https://your-app.vercel.app
+      # fastembed-compatible model (384 dims, ~22MB ONNX file)
       - key: EMBEDDING_MODEL
-        value: sentence-transformers/all-MiniLM-L6-v2  # lighter than all-mpnet-base-v2
+        value: sentence-transformers/all-MiniLM-L6-v2
       - key: EMBEDDING_DIMENSION
         value: "384"
+      # Disable heavy features on free tier
+      - key: USE_RERANKING
+        value: "false"
+      - key: USE_HYBRID_SEARCH
+        value: "false"  # BM25 adds RAM; disable on free tier
+      # Reduce retrieval counts to lower memory pressure
+      - key: BASIC_TOP_K
+        value: "5"
+      - key: ADVANCED_TOP_K
+        value: "5"

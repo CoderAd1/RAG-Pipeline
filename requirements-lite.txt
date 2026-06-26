@@ -1,17 +1,16 @@
+# Lite requirements for Render free tier (512MB RAM)
+# Replaces torch/sentence-transformers/docling with ONNX-based fastembed
+
 # FastAPI and Server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 
-# PDF Processing
+# PDF Processing (PyMuPDF only — no docling/torch)
 PyMuPDF==1.24.14
-docling>=1.0.0
-docling-core>=1.0.0
 
-# Embeddings and ML
-sentence-transformers==2.3.1
-torch>=2.0.0
-transformers==4.37.0
+# Embeddings (ONNX runtime, no PyTorch)
+fastembed>=0.3.6
 
 # Vector Database
 qdrant-client==1.7.3
@@ -34,8 +33,5 @@ pandas>=2.0.0
 # File handling
 aiofiles==23.2.1
 
-# Logging and monitoring
+# Logging
 loguru==0.7.2
-
-# Testing
-pytest>=7.0.0

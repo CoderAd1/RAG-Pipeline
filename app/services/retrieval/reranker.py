@@ -1,8 +1,15 @@
 """Cross-encoder re-ranker for improving retrieval precision."""
 
 from typing import List, Dict, Any, Optional
-from sentence_transformers import CrossEncoder
 from loguru import logger
+
+try:
+    from sentence_transformers import CrossEncoder
+    _CROSS_ENCODER_AVAILABLE = True
+except ImportError:
+    CrossEncoder = None
+    _CROSS_ENCODER_AVAILABLE = False
+    logger.warning("sentence-transformers not installed; reranking will be a no-op")
 
 
 class CrossEncoderReranker:
@@ -20,9 +27,11 @@ class CrossEncoderReranker:
         logger.info(f"CrossEncoderReranker initialized with model: {model_name}")
 
     @property
-    def model(self) -> CrossEncoder:
+    def model(self):
         """Lazy load the cross-encoder model."""
         if self._model is None:
+            if not _CROSS_ENCODER_AVAILABLE:
+                return None
             logger.info(f"Loading cross-encoder model: {self.model_name}")
             self._model = CrossEncoder(self.model_name)
             logger.info("Cross-encoder model loaded successfully")
@@ -35,31 +44,16 @@ class CrossEncoderReranker:
         top_k: Optional[int] = None,
         text_field: str = "text"
     ) -> List[Dict[str, Any]]:
-        """
-        Re-rank documents using cross-encoder.
-
-        Args:
-            query: Search query
-            documents: List of retrieved documents
-            top_k: Number of top results to return (None = return all)
-            text_field: Field name containing document text
-
-        Returns:
-            Re-ranked documents with cross-encoder scores
-        """
         if not documents:
             return []
 
+        if not _CROSS_ENCODER_AVAILABLE or self.model is None:
+            logger.debug("Reranker unavailable; returning documents in original order")
+            return documents[:top_k] if top_k else documents
+
         logger.info(f"Re-ranking {len(documents)} documents for query: '{query[:50]}...'")
 
-        pairs = []
-        for doc in documents:
-            text = doc.get(text_field, "")
-            if isinstance(text, str):
-                pairs.append([query, text])
-            else:
-                pairs.append([query, str(text)])
-
+        pairs = [[query, str(doc.get(text_field, ""))] for doc in documents]
         scores = self.model.predict(pairs)
 
         reranked = []
@@ -72,7 +66,6 @@ class CrossEncoderReranker:
             reranked.append(doc_copy)
 
         reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
-
         if top_k is not None:
             reranked = reranked[:top_k]
 
@@ -80,16 +73,7 @@ class CrossEncoderReranker:
         return reranked
 
     def score_pairs(self, query: str, texts: List[str]) -> List[float]:
-        """
-        Score query-text pairs.
-
-        Args:
-            query: Search query
-            texts: List of text passages
-
-        Returns:
-            List of scores
-        """
+        if not _CROSS_ENCODER_AVAILABLE or self.model is None:
+            return [0.0] * len(texts)
         pairs = [[query, text] for text in texts]
-        scores = self.model.predict(pairs)
-        return [float(s) for s in scores]
+        return [float(s) for s in self.model.predict(pairs)]
