@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import axios from 'axios'
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
 function AuthPage({ onAuth }) {
     const [mode, setMode] = useState('login')
     const [email, setEmail] = useState('')
@@ -15,7 +17,7 @@ function AuthPage({ onAuth }) {
         setMessage(null)
         setLoading(true)
         try {
-            const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/signup'
+            const endpoint = mode === 'login' ? `${BASE_URL}/api/v1/auth/login` : `${BASE_URL}/api/v1/auth/signup`
             const { data } = await axios.post(endpoint, { email, password })
             if (data.access_token) {
                 localStorage.setItem('rag_token', data.access_token)

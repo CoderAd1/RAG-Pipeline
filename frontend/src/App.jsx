@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 import BasicIngestion from './components/BasicIngestion'
 import AdvancedIngestion from './components/AdvancedIngestion'
 import BasicQuery from './components/BasicQuery'
@@ -17,7 +19,7 @@ function App() {
         const token = localStorage.getItem('rag_token')
         const saved = localStorage.getItem('rag_user')
         if (token && saved) {
-            axios.get('/api/v1/auth/me', { headers: { authorization: token } })
+            axios.get(`${BASE_URL}/api/v1/auth/me`, { headers: { authorization: token } })
                 .then(() => setUser(JSON.parse(saved)))
                 .catch(() => { localStorage.removeItem('rag_token'); localStorage.removeItem('rag_user') })
                 .finally(() => setAuthChecked(true))
@@ -27,7 +29,7 @@ function App() {
     }, [])
 
     const handleLogout = async () => {
-        await axios.post('/api/v1/auth/logout').catch(() => {})
+        await axios.post(`${BASE_URL}/api/v1/auth/logout`).catch(() => {})
         localStorage.removeItem('rag_token')
         localStorage.removeItem('rag_user')
         setUser(null)
